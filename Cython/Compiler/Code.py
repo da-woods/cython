@@ -685,6 +685,182 @@ class LazyUtilityCode(UtilityCodeBase):
         globalstate.use_utility_code(utility)
 
 
+class TempTracker(object):
+    # parent           TempsAllocator or None
+    # level            int
+
+    level = 0
+
+    def __init__(self, parent, names_taken):
+        self.parent = parent
+        if self.parent:
+            self.level = self.parent.level + 1
+
+        self.temps_allocated = []  # of (name, type, manage_ref, static)
+        self.temps_free = {}  # (type, manage_ref) -> list of free vars with same type/managed status
+        self.temps_used_type = {}  # name -> (type, manage_ref)
+        self.zombie_temps = set()  # temps that must not be reused after release
+        self.temp_counter = 0
+
+        self.names_taken = names_taken
+
+        # This is used to collect temporaries, useful to find out which temps
+        # need to be privatized in parallel sections
+        self.collect_temps_stack = []
+
+    def validate_exit(self):
+        # validate that all allocated temps have been freed
+        if self.temps_allocated:
+            leftovers = self.temps_in_use()
+            if leftovers:
+                msg = "TEMPGUARD: Temps left over at end of '%s': %s" % (self.scope.name, ', '.join([
+                    '%s [%s]' % (name, ctype)
+                    for name, ctype, is_pytemp in sorted(leftovers)]),
+                )
+                #print(msg)
+                raise RuntimeError(msg)
+
+    def allocate_temp(self, type, manage_ref, static=False, reusable=True):
+        """
+        Allocates a temporary (which may create a new one or get a previously
+        allocated and released one of the same type). Type is simply registered
+        and handed back, but will usually be a PyrexType.
+
+        If type.is_pyobject, manage_ref comes into play. If manage_ref is set to
+        True, the temp will be decref-ed on return statements and in exception
+        handling clauses. Otherwise the caller has to deal with any reference
+        counting of the variable.
+
+        If not type.is_pyobject, then manage_ref will be ignored, but it
+        still has to be passed. It is recommended to pass False by convention
+        if it is known that type will never be a Python object.
+
+        static=True marks the temporary declaration with "static".
+        This is only used when allocating backing store for a module-level
+        C array literals.
+
+        if reusable=False, the temp will not be reused after release.
+
+        A C string referring to the variable is returned.
+        """
+        if type.needs_cpp_construction and self.parent is not None:
+            # keep these scoped to the whole function so behaviour remains the same
+            return self.parent.allocate_temp(type, manage_ref, static, reusable)
+
+        if type.is_cv_qualified and not type.is_reference:
+            type = type.cv_base_type
+        elif type.is_reference and not type.is_fake_reference:
+            type = type.ref_base_type
+        elif type.is_cfunction:
+            from . import PyrexTypes
+            type = PyrexTypes.c_ptr_type(type)  # A function itself isn't an l-value
+        elif type.is_cpp_class and not type.is_fake_reference and self.scope.directives['cpp_locals']:
+            self.scope.use_utility_code(UtilityCode.load_cached("OptionalLocals", "CppSupport.cpp"))
+        if not type.is_pyobject and not type.is_memoryviewslice:
+            # Make manage_ref canonical, so that manage_ref will always mean
+            # a decref is needed.
+            manage_ref = False
+
+        freelist = self.temps_free.get((type, manage_ref))
+        if reusable and freelist is not None and freelist[0]:
+            result = freelist[0].pop()
+            freelist[1].remove(result)
+        else:
+            while True:
+                self.temp_counter += 1
+                result = "%s%d_%d" % (Naming.codewriter_temp_prefix, self.level, self.temp_counter)
+                if result not in self.names_taken: break
+            self.temps_allocated.append((result, type, manage_ref, static))
+            if not reusable:
+                self.zombie_temps.add(result)
+        self.temps_used_type[result] = (type, manage_ref)
+        if DebugFlags.debug_temp_code_comments:
+            self.owner.putln("/* %s allocated (%s)%s */" % (result, type, "" if reusable else " - zombie"))
+
+        if self.collect_temps_stack:
+            self.collect_temps_stack[-1].add((result, type))
+
+        return result
+
+    def release_temp(self, name):
+        """
+        Releases a temporary so that it can be reused by other code needing
+        a temp of the same type.
+        """
+        type, manage_ref = self.temps_used_type[name]
+        freelist = self.temps_free.get((type, manage_ref))
+        if freelist is None:
+            freelist = ([], set())  # keep order in list and make lookups in set fast
+            self.temps_free[(type, manage_ref)] = freelist
+        if name in freelist[1]:
+            raise RuntimeError("Temp %s freed twice!" % name)
+        if name not in self.zombie_temps:
+            freelist[0].append(name)
+        freelist[1].add(name)
+        if DebugFlags.debug_temp_code_comments:
+            self.owner.putln("/* %s released %s*/" % (
+                name, " - zombie" if name in self.zombie_temps else ""))
+
+    def temps_in_use(self):
+        """Return a list of (cname,type,manage_ref) tuples of temp names and their type
+        that are currently in use.
+        """
+        used = []
+        for name, type, manage_ref, static in self.temps_allocated:
+            freelist = self.temps_free.get((type, manage_ref))
+            if freelist is None or name not in freelist[1]:
+                used.append((name, type, manage_ref and type.is_pyobject))
+        if self.parent:
+            used = self.parent.temps_in_use() + used
+        return used
+
+    def temps_holding_reference(self):
+        """Return a list of (cname,type) tuples of temp names and their type
+        that are currently in use. This includes only temps of a
+        Python object type which owns its reference.
+        """
+        out = [(name, type)
+                for name, type, manage_ref in self.temps_in_use()
+                if manage_ref and type.is_pyobject]
+        if self.parent:
+            out = self.parent.temps_holding_reference() + out
+        return out
+
+    def all_managed_temps(self):
+        """Return a list of (cname, type) tuples of refcount-managed Python objects.
+        """
+        out = [(cname, type)
+                for cname, type, manage_ref, static in self.temps_allocated
+                if manage_ref]
+        if self.parent:
+            out = self.parent.all_managed_temps() + out
+        return out
+
+    def all_free_managed_temps(self):
+        """Return a list of (cname, type) tuples of refcount-managed Python
+        objects that are not currently in use.  This is used by
+        try-except and try-finally blocks to clean up temps in the
+        error case.
+        """
+        out = sorted([  # Enforce deterministic order.
+            (cname, type)
+            for (type, manage_ref), freelist in self.temps_free.items() if manage_ref
+            for cname in freelist[0]
+        ])
+        if self.parent:
+            out = self.parent.all_free_managed_temps() + out
+        return out
+
+    def start_collecting_temps(self):
+        """
+        Useful to find out which temps were used in a code block
+        """
+        self.collect_temps_stack.append(set())
+
+    def stop_collecting_temps(self):
+        return self.collect_temps_stack.pop()
+
+
 class FunctionState(object):
     # return_label     string          function return point label
     # error_label      string          error catch point label
@@ -718,16 +894,9 @@ class FunctionState(object):
         self.can_trace = False
         self.gil_owned = True
 
-        self.temps_allocated = []  # of (name, type, manage_ref, static)
-        self.temps_free = {}  # (type, manage_ref) -> list of free vars with same type/managed status
-        self.temps_used_type = {}  # name -> (type, manage_ref)
-        self.zombie_temps = set()  # temps that must not be reused after release
-        self.temp_counter = 0
-        self.closure_temps = None
+        self.temp_tracker = TempTracker(None, self.names_taken)
 
-        # This is used to collect temporaries, useful to find out which temps
-        # need to be privatized in parallel sections
-        self.collect_temps_stack = []
+        self.closure_temps = None
 
         # This is used for the error indicator, which needs to be local to the
         # function. It used to be global, which relies on the GIL being held.
@@ -740,15 +909,7 @@ class FunctionState(object):
 
     def validate_exit(self):
         # validate that all allocated temps have been freed
-        if self.temps_allocated:
-            leftovers = self.temps_in_use()
-            if leftovers:
-                msg = "TEMPGUARD: Temps left over at end of '%s': %s" % (self.scope.name, ', '.join([
-                    '%s [%s]' % (name, ctype)
-                    for name, ctype, is_pytemp in sorted(leftovers)]),
-                )
-                #print(msg)
-                raise RuntimeError(msg)
+        self.temp_tracker.validate_exit()
 
     # labels
 
@@ -842,86 +1003,32 @@ class FunctionState(object):
 
         A C string referring to the variable is returned.
         """
-        if type.is_cv_qualified and not type.is_reference:
-            type = type.cv_base_type
-        elif type.is_reference and not type.is_fake_reference:
-            type = type.ref_base_type
-        elif type.is_cfunction:
-            from . import PyrexTypes
-            type = PyrexTypes.c_ptr_type(type)  # A function itself isn't an l-value
-        elif type.is_cpp_class and not type.is_fake_reference and self.scope.directives['cpp_locals']:
-            self.scope.use_utility_code(UtilityCode.load_cached("OptionalLocals", "CppSupport.cpp"))
-        if not type.is_pyobject and not type.is_memoryviewslice:
-            # Make manage_ref canonical, so that manage_ref will always mean
-            # a decref is needed.
-            manage_ref = False
-
-        freelist = self.temps_free.get((type, manage_ref))
-        if reusable and freelist is not None and freelist[0]:
-            result = freelist[0].pop()
-            freelist[1].remove(result)
-        else:
-            while True:
-                self.temp_counter += 1
-                result = "%s%d" % (Naming.codewriter_temp_prefix, self.temp_counter)
-                if result not in self.names_taken: break
-            self.temps_allocated.append((result, type, manage_ref, static))
-            if not reusable:
-                self.zombie_temps.add(result)
-        self.temps_used_type[result] = (type, manage_ref)
-        if DebugFlags.debug_temp_code_comments:
-            self.owner.putln("/* %s allocated (%s)%s */" % (result, type, "" if reusable else " - zombie"))
-
-        if self.collect_temps_stack:
-            self.collect_temps_stack[-1].add((result, type))
-
-        return result
+        return self.temp_tracker.allocate_temp(type, manage_ref, static, reusable)
 
     def release_temp(self, name):
         """
         Releases a temporary so that it can be reused by other code needing
         a temp of the same type.
         """
-        type, manage_ref = self.temps_used_type[name]
-        freelist = self.temps_free.get((type, manage_ref))
-        if freelist is None:
-            freelist = ([], set())  # keep order in list and make lookups in set fast
-            self.temps_free[(type, manage_ref)] = freelist
-        if name in freelist[1]:
-            raise RuntimeError("Temp %s freed twice!" % name)
-        if name not in self.zombie_temps:
-            freelist[0].append(name)
-        freelist[1].add(name)
-        if DebugFlags.debug_temp_code_comments:
-            self.owner.putln("/* %s released %s*/" % (
-                name, " - zombie" if name in self.zombie_temps else ""))
+        self.temp_tracker.release_temp(name)
 
     def temps_in_use(self):
         """Return a list of (cname,type,manage_ref) tuples of temp names and their type
         that are currently in use.
         """
-        used = []
-        for name, type, manage_ref, static in self.temps_allocated:
-            freelist = self.temps_free.get((type, manage_ref))
-            if freelist is None or name not in freelist[1]:
-                used.append((name, type, manage_ref and type.is_pyobject))
-        return used
+        return self.temp_tracker.temps_in_use()
 
     def temps_holding_reference(self):
         """Return a list of (cname,type) tuples of temp names and their type
         that are currently in use. This includes only temps of a
         Python object type which owns its reference.
         """
-        return [(name, type)
-                for name, type, manage_ref in self.temps_in_use()
-                if manage_ref and type.is_pyobject]
+        return self.temp_tracker.temps_holding_reference()
 
     def all_managed_temps(self):
         """Return a list of (cname, type) tuples of refcount-managed Python objects.
         """
-        return [(cname, type)
-                for cname, type, manage_ref, static in self.temps_allocated
-                if manage_ref]
+        return self.temp_tracker.all_managed_temps()
 
     def all_free_managed_temps(self):
         """Return a list of (cname, type) tuples of refcount-managed Python
@@ -929,20 +1036,23 @@ class FunctionState(object):
         try-except and try-finally blocks to clean up temps in the
         error case.
         """
-        return sorted([  # Enforce deterministic order.
-            (cname, type)
-            for (type, manage_ref), freelist in self.temps_free.items() if manage_ref
-            for cname in freelist[0]
-        ])
+        return self.temp_tracker.all_free_managed_temps()
 
     def start_collecting_temps(self):
         """
         Useful to find out which temps were used in a code block
         """
-        self.collect_temps_stack.append(set())
+        self.temp_tracker.start_collecting_temps()
 
     def stop_collecting_temps(self):
-        return self.collect_temps_stack.pop()
+        return self.temp_tracker.stop_collecting_temps()
+
+    def push_temp_tracker(self):
+        self.temp_tracker = TempTracker(self.temp_tracker, self.names_taken)
+
+    def pop_temp_tracker(self):
+        self.temp_tracker.validate_exit()
+        self.temp_tracker = self.temp_tracker.parent
 
     def init_closure_temps(self, scope):
         self.closure_temps = ClosureTempAllocator(scope)
@@ -2100,7 +2210,7 @@ class CCodeWriter(object):
         self.funcstate.scope.use_entry_utility_code(entry)
 
     def put_temp_declarations(self, func_context):
-        for name, type, manage_ref, static in func_context.temps_allocated:
+        for name, type, manage_ref, static in func_context.temp_tracker.temps_allocated:
             if type.is_cpp_class and not type.is_fake_reference and func_context.scope.directives['cpp_locals']:
                 decl = type.cpp_optional_declaration_code(name)
             else:

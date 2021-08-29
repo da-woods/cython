@@ -378,8 +378,11 @@ class BlockNode(object):
 
 class StatListNode(Node):
     # stats     a list of StatNode
+    # tightly_scope_temps   bool     a new C scope for temps is created around each stat
+                                   # to help the C compiler in long functions like module init
 
     child_attrs = ["stats"]
+    tightly_scope_temps = False
 
     @staticmethod
     def create_analysed(pos, env, *args, **kw):
@@ -406,7 +409,30 @@ class StatListNode(Node):
         #print "StatListNode.generate_execution_code" ###
         for stat in self.stats:
             code.mark_pos(stat.pos)
+            if self.tightly_scope_temps:
+                code.putln("{")
+                old_error_label = code.new_error_label()
+                temp_block = code.insertion_point()
+                code.funcstate.push_temp_tracker()
+
             stat.generate_execution_code(code)
+
+            if self.tightly_scope_temps:
+                if code.funcstate.temp_tracker.temps_allocated or code.label_used(code.error_label):
+                    temp_block.put_temp_declarations(code.funcstate)
+
+                    if code.label_used(code.error_label):
+                        code.putln("if (0) {")
+                        code.put_label(code.error_label)
+                        for cname, type in code.funcstate.all_managed_temps():
+                            code.put_xdecref(cname, type)
+                        code.put_goto(old_error_label)
+                        code.putln("}")
+
+                code.putln("}")
+                code.funcstate.pop_temp_tracker()
+                code.error_label = old_error_label
+
 
     def annotate(self, code):
         for stat in self.stats:
