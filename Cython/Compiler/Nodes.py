@@ -4928,6 +4928,7 @@ class PyClassDefNode(ClassDefNode):
         return cenv
 
     def analyse_declarations(self, env):
+        self.body.tightly_scope_temps = True
         unwrapped_class_result = class_result = self.classobj
         if self.decorators:
             from .ExprNodes import SimpleCallNode

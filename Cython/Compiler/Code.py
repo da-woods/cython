@@ -708,17 +708,17 @@ class TempTracker(object):
         # need to be privatized in parallel sections
         self.collect_temps_stack = []
 
-    def validate_exit(self):
+    def validate_exit(self, scope):
         # validate that all allocated temps have been freed
         if self.temps_allocated:
             leftovers = self.temps_in_use()
             if leftovers:
-                msg = "TEMPGUARD: Temps left over at end of '%s': %s" % (self.scope.name, ', '.join([
+                msg = "TEMPGUARD: Temps left over at end of '%s': %s" % (scope.name, ', '.join([
                     '%s [%s]' % (name, ctype)
                     for name, ctype, is_pytemp in sorted(leftovers)]),
                 )
-                #print(msg)
-                raise RuntimeError(msg)
+                print(msg)
+                #raise RuntimeError(msg)
 
     def allocate_temp(self, type, manage_ref, static=False, reusable=True):
         """
@@ -909,7 +909,7 @@ class FunctionState(object):
 
     def validate_exit(self):
         # validate that all allocated temps have been freed
-        self.temp_tracker.validate_exit()
+        self.temp_tracker.validate_exit(self.scope)
 
     # labels
 
@@ -1051,7 +1051,7 @@ class FunctionState(object):
         self.temp_tracker = TempTracker(self.temp_tracker, self.names_taken)
 
     def pop_temp_tracker(self):
-        self.temp_tracker.validate_exit()
+        self.temp_tracker.validate_exit(self.scope)
         self.temp_tracker = self.temp_tracker.parent
 
     def init_closure_temps(self, scope):
