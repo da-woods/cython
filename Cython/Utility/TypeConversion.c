@@ -474,16 +474,43 @@ static CYTHON_INLINE PyObject* __Pyx__PyNumber_Float(PyObject* obj); /* proto */
 //@requires: Optimize.c::pyunicode_as_double
 
 static CYTHON_INLINE PyObject* __Pyx__PyNumber_Float(PyObject* obj) {
-    // obj is PyFloat is handled in the calling macro
-    if (PyUnicode_CheckExact(obj)) {
-        return PyFloat_FromDouble(__Pyx_PyUnicode_AsDouble(obj));
+    // 'obj is PyFloat' is handled in the calling macro
+    double val;
+    if (PyLong_CheckExact(obj)) {
+#if CYTHON_USE_PYLONG_INTERNALS
+        const digit* digits = ((PyLongObject*)obj)->ob_digit;
+        switch (Py_SIZE(obj)) {
+            case 0:
+                val = 0.0;
+                goto no_error;
+            // single digit PyLong values always cast safely to double
+            case 1:
+                val = (double) digits[0];
+                goto no_error;
+            case -1:
+                val = (double) - (sdigit) digits[0];
+                goto no_error;
+            default:
+                val = PyLong_AsDouble(obj);
+        }
+#else
+        val = PyLong_AsDouble(obj);
+#endif
+    } else if (PyUnicode_CheckExact(obj)) {
+        val = __Pyx_PyUnicode_AsDouble(obj);
     } else if (PyBytes_CheckExact(obj)) {
-        return PyFloat_FromDouble(__Pyx_PyBytes_AsDouble(obj));
+        val = __Pyx_PyBytes_AsDouble(obj);
     } else if (PyByteArray_CheckExact(obj)) {
-        return PyFloat_FromDouble(__Pyx_PyByteArray_AsDouble(obj));
+        val = __Pyx_PyByteArray_AsDouble(obj);
     } else {
         return PyNumber_Float(obj);
     }
+
+    if (unlikely(val == -1 && PyErr_Occurred())) {
+        return NULL;
+    }
+no_error:
+    return PyFloat_FromDouble(val);
 }
 
 /////////////// GCCDiagnostics.proto ///////////////
@@ -761,6 +788,7 @@ static const char DIGITS_HEX[2*16+1] = {
 static CYTHON_INLINE PyObject* {{TO_PY_FUNCTION}}({{TYPE}} value, Py_ssize_t width, char padding_char, char format_char);
 
 /////////////// CIntToPyUnicode ///////////////
+//@requires: StringTools.c::IncludeStringH
 //@requires: StringTools.c::BuildPyUnicode
 //@requires: CIntToDigits
 //@requires: GCCDiagnostics
@@ -802,14 +830,14 @@ static CYTHON_INLINE PyObject* {{TO_PY_FUNCTION}}({{TYPE}} value, Py_ssize_t wid
             digit_pos = abs((int)(remaining % (8*8)));
             remaining = ({{TYPE}}) (remaining / (8*8));
             dpos -= 2;
-            *(uint16_t*)dpos = ((const uint16_t*)DIGIT_PAIRS_8)[digit_pos]; /* copy 2 digits at a time */
+            memcpy(dpos, DIGIT_PAIRS_8 + digit_pos * 2, 2); /* copy 2 digits at a time, unaligned */
             last_one_off = (digit_pos < 8);
             break;
         case 'd':
             digit_pos = abs((int)(remaining % (10*10)));
             remaining = ({{TYPE}}) (remaining / (10*10));
             dpos -= 2;
-            *(uint16_t*)dpos = ((const uint16_t*)DIGIT_PAIRS_10)[digit_pos]; /* copy 2 digits at a time */
+            memcpy(dpos, DIGIT_PAIRS_10 + digit_pos * 2, 2); /* copy 2 digits at a time, unaligned */
             last_one_off = (digit_pos < 10);
             break;
         case 'x':
