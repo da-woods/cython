@@ -613,16 +613,6 @@ static int __Pyx__MatchCase_Mapping_ExtractNonDictV(void *__pyx_refnanny, PyObje
     Py_ssize_t i, j;
     int result = 0;
 
-    dummy = PyObject_CallObject((PyObject *)&PyBaseObject_Type, NULL);
-    if (!dummy) {
-        return -1;
-    }
-    get = PyObject_GetAttrString(map, "get");
-    if (!get) {
-        result = -1;
-        goto end;
-    }
-
     for (i=0; i<2; ++i) {
         PyObject *tuple = keys[i];
         for (j=0; j<PyTuple_GET_SIZE(tuple); ++j) {
@@ -630,23 +620,38 @@ static int __Pyx__MatchCase_Mapping_ExtractNonDictV(void *__pyx_refnanny, PyObje
             PyObject *value = NULL;
             PyObject *key = PyTuple_GET_ITEM(tuple, j);
 
-            // TODO - there's an optimization here (although it deviates from the strict definition of pattern matching). 
+            // there's an optimization here (although it deviates from the strict definition of pattern matching). 
             // If we don't need the values then we can call PyObject_Contains instead of "get". If we don't need *any*
             // of the values then we can skip initialization "get" and "dummy"
-            value = __Pyx_PyObject_Call2Args(get, key, dummy);
-            if (!value) {
-                result = -1;
-                goto end;
-            } else if (value == dummy) {
-                Py_DECREF(value);
-                goto end;  // failed
-            } else {
-                subject = va_arg(subjects, PyObject**);
-                if (subject) {
+            subject = va_arg(subjects, PyObject**);
+            if (subject) {
+                if (!dummy) {
+                    dummy = PyObject_CallObject((PyObject *)&PyBaseObject_Type, NULL);
+                    if (!dummy) {
+                        return -1;
+                    }
+                    get = PyObject_GetAttrString(map, "get");
+                    if (!get) {
+                        result = -1;
+                        goto end;
+                    }
+                }
+
+                value = __Pyx_PyObject_Call2Args(get, key, dummy);
+                if (!value) {
+                    result = -1;
+                    goto end;
+                } else if (value == dummy) {
+                    Py_DECREF(value);
+                    goto end;  // failed
+                } else {
                     __Pyx_XDECREF_SET(*subject, value);
                     __Pyx_GOTREF(*subject);
-                } else {
-                    Py_DECREF(value);
+                }
+            } else {
+                result = PySequence_Contains(map, key);
+                if (result <= 0) {
+                    goto end;
                 }
             }
         }
