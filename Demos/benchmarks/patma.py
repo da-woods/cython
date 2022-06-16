@@ -2,6 +2,7 @@
 # used to test that the Cython version is working well
 
 import cython
+from array import array
 
 
 class A:
@@ -48,6 +49,7 @@ l3 = [0] + list(range(10)) + [0]
 l4 = (
     (0,) + tuple(range(1000000)) + (0,)
 )  # the test here is to avoid making intermediates for the star pattern
+l5 = array('i', l4)
 v1 = 5
 v2 = 6
 c1 = set(l3)
@@ -56,7 +58,7 @@ c3 = A()
 c3.b = 2
 c4 = C
 
-tests = [d1, d2, l1, l2, l3, l4, v1, v2, c1, c2, c3, c3.b, c4]
+tests = [d1, d2, l1, l2, l3, l4, l5, v1, v2, c1, c2, c3, c3.b, c4]
 
 
 def main():
@@ -68,7 +70,11 @@ def main():
         print("Running in Python")
 
     for subject in tests:
-        toprint = subject if subject is not l4 else "long tuple"
+        try:
+            len_ = len(subject)
+        except TypeError:
+            len_ = 1
+        toprint = subject if len_ <= 10 else ("long(%s) %s" % (len_, type(subject)))
         times = []
         timer = Timer(
             "speed_test(subject)", globals=dict(speed_test=speed_test, subject=subject)
