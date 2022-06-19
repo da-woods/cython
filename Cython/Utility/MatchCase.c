@@ -413,7 +413,7 @@ static int __Pyx_MatchCase_IsMapping(PyObject *o, unsigned int *sequence_mapping
 
 static int __Pyx_MatchCase_IsMapping(PyObject *o, unsigned int *sequence_mapping_temp) {
 #if PY_VERSION_HEX >= 0x030A0000
-    return PyType_GetFlags(Py_TYPE(o)) & Py_TPFLAGS_MAPPING;
+    return __Pyx_PyType_HasFeature(Py_TYPE(o), Py_TPFLAGS_MAPPING);
 #else
     unsigned int abc_result, dummy=0;
     if (sequence_mapping_temp) {
@@ -920,4 +920,3 @@ static PyTypeObject* __Pyx_MatchCase_IsType(PyObject* type) {
     Py_INCREF(type);
     return (PyTypeObject*)type;
 }
-
