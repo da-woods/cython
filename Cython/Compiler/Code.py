@@ -22,7 +22,7 @@ import textwrap
 from string import Template
 from functools import partial
 from contextlib import closing
-from collections import defaultdict
+from collections import defaultdict, Counter
 
 from . import Naming
 from . import Options
@@ -541,7 +541,7 @@ class UtilityCode(UtilityCodeBase):
             except KeyError:
                 str_type, name = key
                 cname = replacements[key] = output.get_py_string_const(
-                        StringEncoding.EncodedString(name), identifier=str_type == 'IDENT').cname
+                        StringEncoding.EncodedString(name), identifier=str_type == 'IDENT', is_func=1).cname
             return cname
 
         impl = re.sub(r'PY(IDENT|UNICODE)\("([^"]+)"\)', externalise, impl)
@@ -1165,6 +1165,27 @@ class GlobalState(object):
         'end'
     ]
 
+    def __del__(self):
+        def do_count(counts):
+            d = []
+            for v in counts.values():
+                total_count = 0
+                for in_func in [0, 1]:
+                    count = v[in_func]
+                    if in_func:
+                        count *= 2
+                    total_count += count
+                d.append(total_count)
+            return Counter(d)
+        for id, counts in [
+            ("Str", self.pystring_counts),
+            ("Numbers", self.num_const_counts),
+            ("Other", self.dedup_const_counts),
+        ]:
+            print(id)
+            counter=do_count(counts)
+            print(counter, counter.total())
+
     def __init__(self, writer, module_node, code_config, common_utility_include_dir=None):
         self.filename_table = {}
         self.filename_list = []
@@ -1180,9 +1201,12 @@ class GlobalState(object):
 
         self.const_cnames_used = {}
         self.string_const_index = {}
+        self.pystring_counts = {}
         self.dedup_const_index = {}
+        self.dedup_const_counts = {}
         self.pyunicode_ptr_const_index = {}
         self.num_const_index = {}
+        self.num_const_counts = {}
         self.py_constants = []
         self.cached_cmethods = {}
         self.initialised_constants = set()
@@ -1328,22 +1352,28 @@ class GlobalState(object):
             self.initialised_constants.add(target)
         return self.parts['cached_constants']
 
-    def get_int_const(self, str_value, longness=False):
+    def get_int_const(self, str_value, longness=False, in_func=None):
         py_type = longness and 'long' or 'int'
         try:
             c = self.num_const_index[(str_value, py_type)]
         except KeyError:
             c = self.new_num_const(str_value, py_type)
+        assert in_func is not None
+        cc = self.num_const_counts.setdefault(str_value, [0,0])
+        cc[in_func] += 1
         return c
 
-    def get_float_const(self, str_value, value_code):
+    def get_float_const(self, str_value, value_code, in_func=None):
         try:
             c = self.num_const_index[(str_value, 'float')]
         except KeyError:
             c = self.new_num_const(str_value, 'float', value_code)
+        assert in_func is not None
+        cc = self.num_const_counts.setdefault(str_value, [0,0])
+        cc[in_func] += 1
         return c
 
-    def get_py_const(self, type, prefix='', cleanup_level=None, dedup_key=None):
+    def get_py_const(self, type, prefix='', cleanup_level=None, dedup_key=None, is_func=None):
         if dedup_key is not None:
             const = self.dedup_const_index.get(dedup_key)
             if const is not None:
@@ -1356,9 +1386,13 @@ class GlobalState(object):
             cleanup_writer.putln('Py_CLEAR(%s);' % const.cname)
         if dedup_key is not None:
             self.dedup_const_index[dedup_key] = const
+        assert is_func is not None
+        dedup_key = dedup_key or const
+        cc = self.dedup_const_counts.setdefault(dedup_key, [0,0])
+        cc[is_func] += 1
         return const
 
-    def get_string_const(self, text, py_version=None):
+    def get_string_const(self, text, py_version=None, has_py=False, is_func=None):
         # return a C string constant, creating a new one if necessary
         if text.is_unicode:
             byte_string = text.utf8encode()
@@ -1368,6 +1402,11 @@ class GlobalState(object):
             c = self.string_const_index[byte_string]
         except KeyError:
             c = self.new_string_const(text, byte_string)
+        if has_py:
+            assert is_func is not None
+            cc = self.pystring_counts.setdefault(byte_string, [0,0])
+            cc[is_func] += 1
+
         c.add_py_version(py_version)
         return c
 
@@ -1381,21 +1420,21 @@ class GlobalState(object):
         return c
 
     def get_py_string_const(self, text, identifier=None,
-                            is_str=False, unicode_value=None):
+                            is_str=False, unicode_value=None, is_func=None):
         # return a Python string constant, creating a new one if necessary
         py3str_cstring = None
         if is_str and unicode_value is not None \
                and unicode_value.utf8encode() != text.byteencode():
             py3str_cstring = self.get_string_const(unicode_value, py_version=3)
-            c_string = self.get_string_const(text, py_version=2)
+            c_string = self.get_string_const(text, py_version=2, has_py=True, is_func=is_func)
         else:
-            c_string = self.get_string_const(text)
+            c_string = self.get_string_const(text, has_py=True, is_func=is_func)
         py_string = c_string.get_py_string_const(
             text.encoding, identifier, is_str, py3str_cstring)
         return py_string
 
     def get_interned_identifier(self, text):
-        return self.get_py_string_const(text, identifier=True)
+        return self.get_py_string_const(text, identifier=True, is_func=False)
 
     def new_string_const(self, text, byte_string):
         cname = self.new_string_const_cname(byte_string)
@@ -1937,13 +1976,17 @@ class CCodeWriter(object):
     # constant handling
 
     def get_py_int(self, str_value, longness):
-        return self.globalstate.get_int_const(str_value, longness).cname
+        return self.globalstate.get_int_const(str_value, longness,
+                in_func=bool(self.funcstate.scope and self.funcstate.scope.is_local_scope)).cname
 
     def get_py_float(self, str_value, value_code):
-        return self.globalstate.get_float_const(str_value, value_code).cname
+        return self.globalstate.get_float_const(str_value, value_code,
+            in_func=bool(self.funcstate.scope and self.funcstate.scope.is_local_scope)
+        ).cname
 
     def get_py_const(self, type, prefix='', cleanup_level=None, dedup_key=None):
-        return self.globalstate.get_py_const(type, prefix, cleanup_level, dedup_key).cname
+        in_func=bool(self.funcstate.scope and self.funcstate.scope.is_local_scope)
+        return self.globalstate.get_py_const(type, prefix, cleanup_level, dedup_key, is_func=in_func).cname
 
     def get_string_const(self, text):
         return self.globalstate.get_string_const(text).cname
@@ -1954,10 +1997,12 @@ class CCodeWriter(object):
     def get_py_string_const(self, text, identifier=None,
                             is_str=False, unicode_value=None):
         return self.globalstate.get_py_string_const(
-            text, identifier, is_str, unicode_value).cname
+            text, identifier, is_str, unicode_value,
+            is_func=bool(self.funcstate.scope and self.funcstate.scope.is_local_scope)).cname
 
     def get_argument_default_const(self, type):
-        return self.globalstate.get_py_const(type).cname
+        in_func=bool(self.funcstate.scope and self.funcstate.scope.is_local_scope)
+        return self.globalstate.get_py_const(type, is_func=in_func).cname
 
     def intern(self, text):
         return self.get_py_string_const(text)
