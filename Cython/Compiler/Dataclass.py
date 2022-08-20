@@ -273,7 +273,7 @@ def handle_cclass_dataclass(node, dataclass_args, analyse_decs_transform):
     # default argument values from https://docs.python.org/3/library/dataclasses.html
     kwargs = dict(init=True, repr=True, eq=True,
                   order=False, unsafe_hash=False,
-                  frozen=False, kw_only=False)
+                  frozen=False, kw_only=False, match_args=True)
     if dataclass_args is not None:
         if dataclass_args[0]:
             error(node.pos, "cython.dataclasses.dataclass takes no positional arguments")
@@ -288,6 +288,7 @@ def handle_cclass_dataclass(node, dataclass_args, analyse_decs_transform):
 
     # remove everything that does not belong into _DataclassParams()
     global_kw_only = kwargs.pop("kw_only")
+    match_args = kwargs.pop("match_args")
 
     fields = process_class_get_fields(node, global_kw_only)
 
@@ -319,6 +320,7 @@ def handle_cclass_dataclass(node, dataclass_args, analyse_decs_transform):
 
     code = TemplateCode()
     generate_init_code(code, kwargs['init'], node, fields)
+    generate_match_args(code, match_args, node, fields)
     generate_repr_code(code, kwargs['repr'], node, fields)
     generate_eq_code(code, kwargs['eq'], node, fields)
     generate_order_code(code, kwargs['order'], node, fields)
@@ -451,6 +453,22 @@ def generate_init_code(code, init, node, fields):
 
     args = u", ".join(args)
     code.insert_code_line(function_start_point, u"def __init__(%s):" % args)
+
+
+def generate_match_args(code, match_args, node, fields):
+    """
+    Generates a tuple containing what would be the positional args to __init__
+
+    Note that this is generated even if the user overrides init
+    """
+    if not match_args or node.scope.lookup_here("__match_args__"):
+        return
+    positional_arg_names = []
+    for field_name, field in fields.items():
+        if not field.kw_only.value:
+            positional_arg_names.append(repr(field_name))
+    args = u", ".join(positional_arg_names)
+    code.add_code_line("__match_args__ = (%s,)" % args)
 
 
 def generate_repr_code(code, repr, node, fields):
