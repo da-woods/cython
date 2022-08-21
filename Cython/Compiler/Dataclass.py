@@ -26,7 +26,12 @@ def make_dataclasses_module_callnode(pos):
         python_utility_code = EncodedString(python_utility_code.impl)
         _dataclass_loader_utilitycode = TempitaUtilityCode.load(
             "SpecificModuleLoader", "Dataclasses.c",
-            context={'cname': "dataclasses", 'py_code': python_utility_code.as_c_string_literal()})
+            context={
+                'cname': "dataclasses",
+                'py_code': python_utility_code.as_c_string_literal(),
+                'always_use_fallback': 1,
+            }
+        )
     return ExprNodes.PythonCapiCallNode(
         pos, "__Pyx_Load_dataclasses_Module",
         PyrexTypes.CFuncType(PyrexTypes.py_object_type, []),
@@ -152,7 +157,7 @@ class Field(object):
     default_factory = MISSING
     private = False
 
-    literal_keys = ("repr", "hash", "init", "compare", "metadata")
+    literal_keys = ("repr", "hash", "init", "compare", "kw_only", "metadata")
 
     # default values are defined by the CPython dataclasses.field
     def __init__(self, pos, default=MISSING, default_factory=MISSING,

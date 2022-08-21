@@ -1,14 +1,17 @@
 ///////////////////// ModuleLoader.proto //////////////////////////
 
-static PyObject* __Pyx_LoadInternalModule(const char* name, const char* fallback_code); /* proto */
+static PyObject* __Pyx_LoadInternalModule(const char* name, const char* fallback_code, int always_use_fallback); /* proto */
 
 //////////////////// ModuleLoader ///////////////////////
 //@requires: CommonStructures.c::FetchSharedCythonModule
 
-static PyObject* __Pyx_LoadInternalModule(const char* name, const char* fallback_code) {
+static PyObject* __Pyx_LoadInternalModule(const char* name, const char* fallback_code, int always_use_fallback) {
     // We want to be able to use the contents of the standard library dataclasses module where available.
     // If those objects aren't available (due to Python version) then a simple fallback is substituted
     // instead, which largely just fails with a not-implemented error.
+    //
+    // Dataclasses set the always_use_fallback flag to allow some adaptation for additions to the interface
+    // numbers of arguments
     //
     // The fallbacks are placed in the "shared abi module" as a convenient internal place to
     // store them
@@ -25,10 +28,12 @@ static PyObject* __Pyx_LoadInternalModule(const char* name, const char* fallback
     }
 
     // the best and simplest case is simply to defer to the standard library (if available)
-    module = PyImport_ImportModule(name);
+    if (!always_use_fallback) {
+        module = PyImport_ImportModule(name);
+    }
     if (!module) {
         PyObject *localDict, *runValue, *builtins, *modulename;
-        if (!PyErr_ExceptionMatches(PyExc_ImportError)) goto bad;
+        if (!always_use_fallback && !PyErr_ExceptionMatches(PyExc_ImportError)) goto bad;
         PyErr_Clear();  // this is reasonably likely (especially on older versions of Python)
 #if PY_MAJOR_VERSION < 3
         modulename = PyBytes_FromFormat("_cython_" CYTHON_ABI ".%s", name);
@@ -74,5 +79,5 @@ static PyObject* __Pyx_Load_{{cname}}_Module(void); /* proto */
 //@requires: ModuleLoader
 
 static PyObject* __Pyx_Load_{{cname}}_Module(void) {
-    return __Pyx_LoadInternalModule("{{cname}}", {{py_code}});
+    return __Pyx_LoadInternalModule("{{cname}}", {{py_code}}, {{always_use_fallback}});
 }
