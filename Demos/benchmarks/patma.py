@@ -40,9 +40,15 @@ class D(dict):
     def __repr__(self):
         return "D(%s)" % super(D, self).__repr__()
 
+class E(dict):
+    def __repr__(self):
+        return "E(%s)" % super(E, self).__repr__()
+    def get(self, key, default):
+        return super().get(key, default)
 
 d1 = {"a": "xxx", 1: 500}
 d2 = D(d1)
+d3 = E(d1)
 l1 = [0, 1, 2]
 l2 = []
 l3 = [0] + list(range(10)) + [0]
@@ -58,7 +64,7 @@ c3 = A()
 c3.b = 2
 c4 = C
 
-tests = [d1, d2, l1, l2, l3, l4, l5, v1, v2, c1, c2, c3, c3.b, c4]
+tests = [d1, d2, d3, l1, l2, l3, l4, l5, v1, v2, c1, c2, c3, c3.b, c4]
 
 
 def main():
