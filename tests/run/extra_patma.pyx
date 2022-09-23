@@ -3,7 +3,23 @@
 # Extra pattern matching test for Cython-specific features, optimizations, etc.
 
 cimport cython
+
 import array
+import sys
+
+__doc__ = ""
+
+if sys.version_info[0] > 2:
+    __doc__ += """
+    array.array doesn't have the buffer protocol in Py2 and
+    this doesn't really feel worth working around to test
+    >>> print(test_memoryview(array.array('i', [0, 1, 2])))
+    a 1
+    >>> print(test_memoryview(array.array('i', [])))
+    b
+    >>> print(test_memoryview(array.array('i', [5])))
+    c [5]
+    """
 
 # goes via .shape instead
 @cython.test_fail_if_path_exists("//CallNode//NameNode[@name = 'len']")
@@ -11,14 +27,8 @@ import array
 @cython.test_fail_if_path_exists("//PythonCapiCallNode//PythonCapiFunctionNode[@cname = '__Pyx_MatchCase_IsSequence']")
 def test_memoryview(int[:] x):
     """
-    >>> print(test_memoryview(array.array('i', [0, 1, 2])))
-    a 1
-    >>> print(test_memoryview(array.array('i', [])))
-    b
     >>> print(test_memoryview(None))
     no!
-    >>> print(test_memoryview(array.array('i', [5])))
-    c [5]
     """
     match x:
         case [0, y, 2]:
@@ -71,44 +81,6 @@ def test_ctuple_to_sequence((int, int) x):
             assert cython.typeof(a) == "int", cython.typeof(a)  # test that types have inferred
             return a, b
 
-def test_array_is_sequence(x):
-    """
-    Because this has to be specifically special-cased on early Python versions
-    >>> test_array_is_sequence(array.array('i', [0, 1, 2]))
-    1
-    >>> test_array_is_sequence(array.array('i', [0, 1, 2, 3, 4]))
-    [0, 1, 2, 3, 4]
-    """
-    match x:
-        case [0, y, 2]:
-            return y
-        case [*z]:
-            return z
-        case _:
-            return "Not a sequence"
-
-def test_duplicate_keys(key1, key2):
-    """
-    Extra to TestValueErrors in test_patma
-    Cython sorts keys into literal and runtime. This tests when two runtime keys clash
-
-    >>> test_duplicate_keys("a", "b")
-    True
-    >>> test_duplicate_keys("a", "a")
-    Traceback (most recent call last):
-    ...
-    ValueError: mapping pattern checks duplicate key ('a')
-    """
-    class Keys:
-        KEY_1 = key1
-        KEY_2 = key2
-
-    match {"a": 1, "b": 2}:
-        case {Keys.KEY_1: _, Keys.KEY_2: _}:
-            return True
-        case _:
-            return False
-
 cdef class C:
     cdef double x
     def __init__(self, x):
@@ -126,7 +98,7 @@ def class_attr_lookup(x):
             assert cython.typeof(y) == "double", cython.typeof(y)
             return y
 
-class PyClass:
+class PyClass(object):
     pass
 
 @cython.test_assert_path_exists("//PythonCapiFunctionNode[@cname='__Pyx_TypeCheck']")
@@ -147,6 +119,7 @@ def class_typecheck_exists(x):
         case _:
             return False
 
+
 @cython.test_fail_if_path_exists("//NameNode[@name='isinstance']")
 @cython.test_fail_if_path_exists("//PythonCapiFunctionNode[@cname='__Pyx_TypeCheck']")
 def class_typecheck_doesnt_exist(C x):
@@ -161,3 +134,19 @@ def class_typecheck_doesnt_exist(C x):
             return True
         case _:
             return False
+
+def simple_or_with_targets(x):
+    """
+    This was being mishandled by being converted to an if statement
+    without accounting for target assignment
+    >>> simple_or_with_targets(1)
+    1
+    >>> simple_or_with_targets(2)
+    2
+    >>> simple_or_with_targets(3)
+    3
+    >>> simple_or_with_targets(4)
+    """
+    match x:
+        case ((1 as y)|(2 as y)|(3 as y)):
+            return y

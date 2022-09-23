@@ -562,7 +562,12 @@ class OrPatternNode(PatternNode):
             a.validate_irrefutable()
 
     def is_simple_value_comparison(self):
-        return all(a.is_simple_value_comparison() for a in self.alternatives)
+        return all(
+            # it turns out to be hard to generate correct assignment code
+            # for or patterns with targets
+            a.is_simple_value_comparison() and not a.get_targets()
+            for a in self.alternatives
+        )
 
     def is_really_simple_value_comparison(self):
         # like is_simple_value_comparison but also doesn't have any targets
@@ -572,20 +577,13 @@ class OrPatternNode(PatternNode):
     def get_simple_comparison_node(self, subject_node):
         assert self.is_simple_value_comparison()
         assert len(self.alternatives) >= 2, self.alternatives
-        binop = ExprNodes.BoolBinopNode(
-            self.pos,
-            operator="or",
-            operand1=self.alternatives[0].get_simple_comparison_node(subject_node),
-            operand2=self.alternatives[1].get_simple_comparison_node(subject_node),
-        )
-        for a in self.alternatives[2:]:
-            binop = ExprNodes.BoolBinopNode(
-                self.pos,
-                operator="or",
-                operand1=binop,
-                operand2=a.get_simple_comparison_node(subject_node),
-            )
-        return binop
+        checks = []
+        for a in self.alternatives:
+            checks.append(a.get_simple_comparison_node(subject_node))
+        if any(isinstance(ch, ExprNodes.BoolNode) and ch.value for ch in checks):
+            # handle the obvious very simple case
+            return ExprNodes.BoolNode(self.pos, value=True)
+        return generate_binop_tree_from_list(self.pos, "or", checks)
 
     def get_comparison_node(self, subject_node, sequence_mapping_temp=None):
         if self.is_really_simple_value_comparison():
@@ -593,18 +591,23 @@ class OrPatternNode(PatternNode):
 
         cond_exprs = []
         for n, a in enumerate(self.alternatives, start=1):
-            cond_exprs.append(
-                ExprNodes.CondExprNode(
-                    self.pos,
-                    test = a.get_comparison_node(subject_node, sequence_mapping_temp),
-                    true_val = ExprNodes.IntNode(a.pos, value=str(n)),
-                    false_val = None  # fill in later
+            a_test = a.get_comparison_node(subject_node, sequence_mapping_temp)
+            a_value = ExprNodes.IntNode(a.pos, value=str(n))
+            if isinstance(a_test, ExprNodes.BoolNode) and a_test.value:
+                cond_exprs.append(a_value)
+                break  # no point in going further
+            else:
+                cond_exprs.append(
+                    ExprNodes.CondExprNode(
+                        self.pos,
+                        test = a_test,
+                        true_val = a_value,
+                        false_val = ExprNodes.IntNode(self.pos, value="0")
+                    )
                 )
-            )
-        expr = ExprNodes.IntNode(self.pos, value="0")
-        for cond_expr in reversed(cond_exprs):
-            cond_expr.false_val = expr
-            expr = cond_expr
+        
+        expr = generate_binop_tree_from_list(self.pos, "or", cond_exprs)
+
         if self.which_alternative_temp:
             expr = ExprNodes.AssignmentExpressionNode(
                 self.pos,
@@ -749,15 +752,23 @@ class MatchSequencePatternNode(PatternNode):
 
         test = None
         assert getattr(self, "subject_temps", None) is not None
+
+        seq_test = self.make_sequence_check(subject_node, sequence_mapping_temp)
+        if isinstance(seq_test, ExprNodes.BoolNode) and not seq_test.value:
+            return seq_test  # no point in proceeding further!
+
+        has_star = False
+        all_tests = [seq_test]
+        pattern_tests = []
         for n, pattern in enumerate(self.patterns):
+            if isinstance(pattern, MatchAndAssignPatternNode) and pattern.is_star:
+                has_star = True
+                self.needs_length_temp = True
+
             if self.subject_temps[n] is None:
                 # The subject has been identified as unneeded, so don't evaluate it
                 continue
             p_test = pattern.get_comparison_node(self.subject_temps[n])
-            if test is not None:
-                p_test = ExprNodes.BoolBinopNode(
-                    self.pos, operator="and", operand1=test, operand2=p_test
-                )
 
             result_ref = ResultRefNode(pos=self.pos, type=PyrexTypes.c_bint_type)
             subject_assignment = Nodes.SingleAssignmentNode(
@@ -771,50 +782,32 @@ class MatchSequencePatternNode(PatternNode):
             stats = Nodes.StatListNode(
                 self.pos, stats=[subject_assignment, test_assignment]
             )
-            test = TempResultFromStatNode(result_ref, stats)
+            pattern_tests.append(TempResultFromStatNode(result_ref, stats))
 
-        seq_test = self.make_sequence_check(subject_node, sequence_mapping_temp)
-        if isinstance(seq_test, ExprNodes.BoolNode) and not seq_test.value:
-            return seq_test  # no point in proceeding further!
-        has_star = False
-        for pattern in self.patterns:
-            if pattern.is_match_and_assign_pattern and pattern.is_star:
-                has_star = True
-                self.needs_length_temp = True
-                break
-        len_test = len(self.patterns)
+        min_length = len(self.patterns)
         if has_star:
-            len_test -= 1
+            min_length -= 1
         # check whether we need a length call...
         if not (self.patterns and len(self.patterns) == 1 and has_star):
             length_call = self.make_length_call_node(subject_node)
 
             if length_call.is_literal and (
-                (has_star and len_test < length_call.constant_result)
-                or (not has_star and len_test != length_call.constant_result)
+                (has_star and min_length < length_call.constant_result)
+                or (not has_star and min_length != length_call.constant_result)
             ):
                 # definitely failed!
                 return ExprNodes.BoolNode(self.pos, value=False)
-            seq_len_test = ExprNodes.BoolBinopNode(
+            seq_len_test = ExprNodes.PrimaryCmpNode(
                 self.pos,
-                operator="and",
-                operand1=seq_test,
-                operand2=ExprNodes.PrimaryCmpNode(
-                    self.pos,
-                    operator=">=" if has_star else "==",
-                    operand1=length_call,
-                    operand2=ExprNodes.IntNode(self.pos, value=str(len_test)),
-                ),
+                operator=">=" if has_star else "==",
+                operand1=length_call,
+                operand2=ExprNodes.IntNode(self.pos, value=str(min_length)),
             )
+            all_tests.append(seq_len_test)
         else:
             self.needs_length_temp = False
-            seq_len_test = seq_test
-        if test is None:
-            test = seq_len_test
-        else:
-            test = ExprNodes.BoolBinopNode(
-                self.pos, operator="and", operand1=seq_len_test, operand2=test
-            )
+        all_tests.extend(pattern_tests)
+        test = generate_binop_tree_from_list(self.pos, "and", all_tests)
         return LazyCoerceToBool(test.pos, arg=test)
 
     def generate_subjects(self, subject_node, env):
@@ -1067,30 +1060,32 @@ class MatchMappingPatternNode(PatternNode):
         ],
         exception_value="-1",
     )
+    # lie about the types of keys for simplicity
     Pyx_mapping_check_duplicates_type = PyrexTypes.CFuncType(
         PyrexTypes.c_int_type,
         [
-            PyrexTypes.CFuncTypeArg("fixed_keys", PyrexTypes.py_object_type, None),
-            PyrexTypes.CFuncTypeArg("var_keys", PyrexTypes.py_object_type, None),
+            PyrexTypes.CFuncTypeArg("keys", PyrexTypes.c_void_ptr_type, None),
+            PyrexTypes.CFuncTypeArg("nKeys", PyrexTypes.c_py_ssize_t_type, None),
         ],
         exception_value="-1",
     )
+    # lie about the types of keys and subjects for simplicity
     Pyx_mapping_extract_subjects_type = PyrexTypes.CFuncType(
         PyrexTypes.c_bint_type,
         [
-            PyrexTypes.CFuncTypeArg("map", PyrexTypes.py_object_type, None),
-            PyrexTypes.CFuncTypeArg("fixed_keys", PyrexTypes.py_object_type, None),
-            PyrexTypes.CFuncTypeArg("var_keys", PyrexTypes.py_object_type, None),
+            PyrexTypes.CFuncTypeArg("mapping", PyrexTypes.py_object_type, None),
+            PyrexTypes.CFuncTypeArg("keys", PyrexTypes.c_void_ptr_type, None),
+            PyrexTypes.CFuncTypeArg("nKeys", PyrexTypes.c_py_ssize_t_type, None),
+            PyrexTypes.CFuncTypeArg("subjects", PyrexTypes.c_void_ptr_ptr_type, None),
         ],
         exception_value="-1",
-        has_varargs=True,
     )
     Pyx_mapping_doublestar_type = PyrexTypes.CFuncType(
         Builtin.dict_type,
         [
-            PyrexTypes.CFuncTypeArg("map", PyrexTypes.py_object_type, None),
-            PyrexTypes.CFuncTypeArg("fixed_keys", PyrexTypes.py_object_type, None),
-            PyrexTypes.CFuncTypeArg("var_keys", PyrexTypes.py_object_type, None),
+            PyrexTypes.CFuncTypeArg("mapping", PyrexTypes.py_object_type, None),
+            PyrexTypes.CFuncTypeArg("keys", PyrexTypes.c_void_ptr_type, None),
+            PyrexTypes.CFuncTypeArg("nKeys", PyrexTypes.c_py_ssize_t_type, None),
         ],
     )
 
@@ -1191,8 +1186,6 @@ class MatchMappingPatternNode(PatternNode):
         # multiple times.
         # DW has decided that that's too complicated to implement
         # for now.
-        from . import Builtin
-
         utility_code = UtilityCode.load_cached("IsMapping", "MatchCase.c")
         if sequence_mapping_temp is not None:
             sequence_mapping_temp = ExprNodes.AmpersandNode(
@@ -1212,8 +1205,10 @@ class MatchMappingPatternNode(PatternNode):
             self.pos, arg=subject_node, fallback=call, check=self.is_dict_type_check
         )
 
-    def make_duplicate_keys_check(self, static_keys_tuple, var_keys_tuple):
+    def make_duplicate_keys_check(self, n_fixed_keys):
         utility_code = UtilityCode.load_cached("MappingKeyCheck", "MatchCase.c")
+        if n_fixed_keys == len(self.keys):
+            return None  # nothing to check
 
         return Nodes.ExprStatNode(
             self.pos,
@@ -1222,16 +1217,25 @@ class MatchMappingPatternNode(PatternNode):
                 "__Pyx_MatchCase_CheckMappingDuplicateKeys",
                 self.Pyx_mapping_check_duplicates_type,
                 utility_code=utility_code,
-                args=[static_keys_tuple.clone_node(), var_keys_tuple],
+                args=[
+                    MappingOrClassComparisonNode.make_keys_node(self.pos),
+                    ExprNodes.IntNode(self.pos, value=str(n_fixed_keys)),
+                    ExprNodes.IntNode(self.pos, value=str(len(self.keys)))
+                ],
             ),
         )
 
-    def check_all_keys(self, subject_node, const_keys_tuple, var_keys_tuple):
+    def check_all_keys(self, subject_node):
         # It's debatable here whether to go for individual unpacking or a function.
         # Current implementation is a function that's loosely copied from CPython.
         # For small numbers of keys it might be better to generate the code instead.
         # There's three versions depending on if we know that the type is exactly
         # a dict, definitely not or dict, or unknown.
+        # The advantages of generating a function are:
+        # * more compact code
+        # * easier to check the type once then branch the implementation
+        # * faster in the cases that are more likely to fail due to wrong keys being
+        # present than due to the values not matching the patterns
         if not self.keys:
             return ExprNodes.BoolNode(self.pos, value=True)
 
@@ -1247,24 +1251,23 @@ class MatchMappingPatternNode(PatternNode):
             util_code = UtilityCode.load_cached("ExtractGeneric", "MatchCase.c")
             func_name = "__Pyx_MatchCase_Mapping_Extract"
 
-        subject_derefs = [
-            ExprNodes.NullNode(self.pos)
-            if t is None
-            else AddressOfPyObjectNode(self.pos, obj=t)
-            for t in self.subject_temps
-        ]
         return ExprNodes.PythonCapiCallNode(
             self.pos,
             func_name,
             self.Pyx_mapping_extract_subjects_type,
             utility_code=util_code,
-            args=[subject_node, const_keys_tuple.clone_node(), var_keys_tuple]
-            + subject_derefs,
+            args=[
+                subject_node,
+                MappingOrClassComparisonNode.make_keys_node(self.pos),
+                ExprNodes.IntNode(
+                    self.pos,
+                    value=str(len(self.keys))
+                ),
+                MappingOrClassComparisonNode.make_subjects_node(self.pos),
+            ],
         )
 
-    def make_double_star_capture(
-        self, subject_node, const_tuple, var_tuple, test_result
-    ):
+    def make_double_star_capture(self, subject_node, test_result):
         # test_result being the variable that holds "case check passed until now"
         is_dict = self.is_dict_type_check(subject_node.type)
         if is_dict:
@@ -1281,7 +1284,11 @@ class MatchMappingPatternNode(PatternNode):
             "__Pyx_MatchCase_DoubleStarCapture" + tag,
             self.Pyx_mapping_doublestar_type,
             utility_code=utility_code,
-            args=[subject_node, const_tuple, var_tuple],
+            args=[
+                subject_node,
+                MappingOrClassComparisonNode.make_keys_node(self.pos),
+                ExprNodes.IntNode(self.pos, value=str(len(self.keys)))
+            ],
         )
         assignment = Nodes.SingleAssignmentNode(
             self.double_star_capture_target.pos, lhs=self.double_star_temp, rhs=func
@@ -1298,72 +1305,57 @@ class MatchMappingPatternNode(PatternNode):
     def get_comparison_node(self, subject_node, sequence_mapping_temp=None):
         from . import UtilNodes
 
-        const_keys = []
         var_keys = []
+        n_literal_keys = 0
         for k in self.keys:
-            if not k.arg.is_literal:
-                k = UtilNodes.ResultRefNode(k, is_temp=False)
+            if not k.is_literal:
                 var_keys.append(k)
             else:
-                const_keys.append(k.arg.clone_node())
-        const_keys_tuple = ExprNodes.TupleNode(self.pos, args=const_keys)
-        var_keys_tuple = ExprNodes.TupleNode(self.pos, args=var_keys)
-        if var_keys:
-            var_keys_tuple = UtilNodes.ResultRefNode(var_keys_tuple, is_temp=True)
+                n_literal_keys += 1
 
-        test = self.make_mapping_check(subject_node, sequence_mapping_temp)
-        key_check = self.check_all_keys(subject_node, const_keys_tuple, var_keys_tuple)
-        test = ExprNodes.binop_node(
-            self.pos, operator="and", operand1=test, operand2=key_check
-        )
+        all_tests = []
+        all_tests.append(self.make_mapping_check(subject_node, sequence_mapping_temp))
+        all_tests.append(self.check_all_keys(subject_node))
 
-        pattern_test = None
+        if any(isinstance(test, ExprNodes.BoolNode) and not test.value for test in all_tests):
+            # identify automatic-failure
+            return ExprNodes.BoolNode(self.pos, value=False)
+
         for pattern, subject in zip(self.value_patterns, self.subject_temps):
             if pattern.is_irrefutable():
                 continue
             assert subject
-            pattern_test2 = pattern.get_comparison_node(subject)
-            if pattern_test:
-                pattern_test = ExprNodes.binop_node(
-                    pattern.pos,
-                    operator="and",
-                    operand1=pattern_test,
-                    operand2=pattern_test2,
-                )
-            else:
-                pattern_test = pattern_test2
-        if pattern_test:
-            test = ExprNodes.binop_node(
-                self.pos, operator="and", operand1=test, operand2=pattern_test
-            )
+            all_tests.append(pattern.get_comparison_node(subject))
+
+        all_tests = generate_binop_tree_from_list(self.pos, "and", all_tests)
 
         test_result = UtilNodes.ResultRefNode(pos=self.pos, type=PyrexTypes.c_bint_type)
+        duplicate_check = self.make_duplicate_keys_check(n_literal_keys)
         body = Nodes.StatListNode(
             self.pos,
-            stats=[
-                self.make_duplicate_keys_check(const_keys_tuple, var_keys_tuple),
-                Nodes.SingleAssignmentNode(self.pos, lhs=test_result, rhs=test),
+            stats=([duplicate_check] if duplicate_check else []) + [
+                Nodes.SingleAssignmentNode(self.pos, lhs=test_result, rhs=all_tests),
             ],
         )
         if self.double_star_capture_target:
             assert self.double_star_temp
             body.stats.append(
                 # make_double_star_capture wraps itself in an if
-                self.make_double_star_capture(
-                    subject_node, const_keys_tuple, var_keys_tuple, test_result
-                )
+                self.make_double_star_capture(subject_node, test_result)
             )
 
-        if var_keys or self.double_star_capture_target:
+        if duplicate_check or self.double_star_capture_target:
             body = UtilNodes.TempResultFromStatNode(test_result, body)
-            if var_keys:
-                body = UtilNodes.EvalWithTempExprNode(var_keys_tuple, body)
-            for k in var_keys:
-                if isinstance(k, UtilNodes.ResultRefNode):
-                    body = UtilNodes.EvalWithTempExprNode(k, body)
-            return LazyCoerceToBool(body.pos, arg=body)
         else:
-            return LazyCoerceToBool(test.pos, arg=test)
+            body = all_tests
+        if self.keys or self.double_star_capture_target:
+            body = MappingOrClassComparisonNode(
+                body.pos,
+                arg=LazyCoerceToBool(body.pos, arg=body),
+                keys_array=self.keys,
+                subjects_array=self.subject_temps
+            )
+        return LazyCoerceToBool(body.pos, arg=body)
 
     def analyse_pattern_expressions(self, env, sequence_mapping_temp):
         def to_temp_or_literal(node):
@@ -1373,7 +1365,7 @@ class MatchMappingPatternNode(PatternNode):
                 return node.coerce_to_temp(env)
 
         self.keys = [
-            ExprNodes.ProxyNode(to_temp_or_literal(k.analyse_expressions(env)))
+            to_temp_or_literal(k.analyse_expressions(env))
             for k in self.keys
         ]
 
@@ -1424,16 +1416,19 @@ class ClassPatternNode(PatternNode):
     keyword_pattern_names = []
     keyword_pattern_patterns = []
 
+    # as with the mapping functions, lie a little about some of the types for
+    # ease of declaration
     Pyx_positional_type = PyrexTypes.CFuncType(
         PyrexTypes.c_bint_type,
         [
             PyrexTypes.CFuncTypeArg("subject", PyrexTypes.py_object_type, None),
             PyrexTypes.CFuncTypeArg("type", Builtin.type_type, None),
-            PyrexTypes.CFuncTypeArg("keysnames_tuple", PyrexTypes.py_object_type, None),
+            PyrexTypes.CFuncTypeArg("fixed_names", PyrexTypes.c_void_ptr_type, None),
+            PyrexTypes.CFuncTypeArg("n_fixed", PyrexTypes.c_py_ssize_t_type, None),
             PyrexTypes.CFuncTypeArg("match_self", PyrexTypes.c_int_type, None),
-            PyrexTypes.CFuncTypeArg("num_args", PyrexTypes.c_int_type, None),
+            PyrexTypes.CFuncTypeArg("subjects", PyrexTypes.c_void_ptr_ptr_type, None),
+            PyrexTypes.CFuncTypeArg("n_subjects", PyrexTypes.c_int_type, None),
         ],
-        has_varargs=True,
         exception_value="-1",
     )
 
@@ -1470,7 +1465,7 @@ class ClassPatternNode(PatternNode):
         for p, p_name in zip(self.keyword_pattern_patterns, self.keyword_pattern_names):
             # The attribute lookups are calculated here to maximize chance of type interference
             attr_lookup = ExprNodes.AttributeNode(
-                p_name.pos, obj=subject_node, attribute=p_name.name
+                p_name.pos, obj=subject_node, attribute=p_name.name, dont_mangle_private_names=True
             )
             self.keyword_subject_attrs.append(attr_lookup)
             if not p.get_targets() and p.is_irrefutable():
@@ -1603,13 +1598,10 @@ class ClassPatternNode(PatternNode):
     def make_positional_args_call(self, subject_node, class_node):
         assert self.positional_patterns
         util_code = UtilityCode.load_cached("ClassPositionalPatterns", "MatchCase.c")
-        keynames = ExprNodes.TupleNode(
-            self.pos,
-            args=[
-                ExprNodes.StringNode(n.pos, value=n.name)
-                for n in self.keyword_pattern_names
-            ],
-        )
+        keynames = [
+            ExprNodes.StringNode(n.pos, value=n.name)
+            for n in self.keyword_pattern_names
+        ]
         # -1 is "unknown"
         match_self = (
             -1
@@ -1642,36 +1634,37 @@ class ClassPatternNode(PatternNode):
                     match_self = 0  # I think... Relies on knowing the bases
 
         match_self = ExprNodes.IntNode(self.pos, value=str(match_self))
-        len_ = ExprNodes.IntNode(self.pos, value=str(len(self.positional_patterns)))
-        subject_derefs = [
-            ExprNodes.NullNode(self.pos)
-            if t is None
-            else AddressOfPyObjectNode(self.pos, obj=t)
-            for t in self.positional_subject_temps
-        ]
-        return ExprNodes.PythonCapiCallNode(
+        n_subjects = ExprNodes.IntNode(self.pos, value=str(len(self.positional_patterns)))
+        return MappingOrClassComparisonNode(
             self.pos,
-            "__Pyx_MatchCase_ClassPositional",
-            self.Pyx_positional_type,
-            utility_code=util_code,
-            args=[subject_node, class_node, keynames, match_self, len_]
-            + subject_derefs,
+            arg=ExprNodes.PythonCapiCallNode(
+                self.pos,
+                "__Pyx_MatchCase_ClassPositional",
+                self.Pyx_positional_type,
+                utility_code=util_code,
+                args=[
+                    subject_node,
+                    class_node,
+                    MappingOrClassComparisonNode.make_keys_node(self.pos),
+                    ExprNodes.IntNode(self.pos, value=str(len(keynames))),
+                    match_self,
+                    MappingOrClassComparisonNode.make_subjects_node(self.pos),
+                    n_subjects,
+                ]
+            ),
+            subjects_array=self.positional_subject_temps,
+            keys_array=keynames,
         )
+        return 
 
     def make_subpattern_checks(self):
         patterns = self.keyword_pattern_patterns + self.positional_patterns
         temps = self.keyword_subject_temps + self.positional_subject_temps
-        cmp_node = None
+        checks = []
         for temp, pattern in zip(temps, patterns):
             if temp:
-                p_cmp_node = pattern.get_comparison_node(temp)
-                if cmp_node:
-                    cmp_node = ExprNodes.binop_node(
-                        self.pos, operator="and", operand1=cmp_node, operand2=p_cmp_node
-                    )
-                else:
-                    cmp_node = p_cmp_node
-        return cmp_node
+                checks.append(pattern.get_comparison_node(temp))
+        return checks
 
     def get_comparison_node(self, subject_node, sequence_mapping_temp=None):
         from .UtilNodes import ResultRefNode, EvalWithTempExprNode
@@ -1691,7 +1684,8 @@ class ClassPatternNode(PatternNode):
                 )
             class_node = ResultRefNode(class_node)
 
-        call = self.make_typecheck_call(subject_node, class_node)
+        all_checks = []
+        all_checks.append(self.make_typecheck_call(subject_node, class_node))
 
         if self.class_known_type:
             # From this point on we know the type of the subject
@@ -1702,30 +1696,23 @@ class ClassPatternNode(PatternNode):
                 typecheck=False,
             )
         if self.positional_patterns:
-            call = ExprNodes.binop_node(
-                self.pos,
-                operator="and",
-                operand1=call,
-                operand2=self.make_positional_args_call(subject_node, class_node),
-            )
+            all_checks.append(self.make_positional_args_call(subject_node, class_node))
         if self.keyword_pattern_names:
-            call = ExprNodes.binop_node(
-                self.pos,
-                operator="and",
-                operand1=call,
-                operand2=self.make_keyword_pattern_lookups(),
-            )
+            all_checks.append(self.make_keyword_pattern_lookups())
 
-        subpattern_checks = self.make_subpattern_checks()
-        if subpattern_checks:
-            call = ExprNodes.binop_node(
-                self.pos, operator="and", operand1=call, operand2=subpattern_checks
-            )
+        all_checks.extend(self.make_subpattern_checks())
+        
 
-        if isinstance(class_node, ResultRefNode) and not call.is_literal:
-            return LazyCoerceToBool(class_node.pos, arg=EvalWithTempExprNode(class_node, call))
+        if any(isinstance(ch, ExprNodes.BoolNode) and not ch.value for ch in all_checks):
+            # handle any obvious failures
+            return ExprNodes.BoolNode(self.pos, value=False)
+
+        all_checks = generate_binop_tree_from_list(self.pos, "and", all_checks)
+
+        if isinstance(class_node, ResultRefNode) and not all_checks.is_literal:
+            return LazyCoerceToBool(class_node.pos, arg=EvalWithTempExprNode(class_node, all_checks))
         else:
-            return LazyCoerceToBool(call.pos, arg=call)
+            return LazyCoerceToBool(all_checks.pos, arg=all_checks)
 
     def analyse_declarations(self, env):
         self.validate_keywords()
@@ -2083,27 +2070,6 @@ class CompilerDirectivesExprNode(ExprNodes.ProxyNode):
             self.arg.annotate(code)
 
 
-class AddressOfPyObjectNode(ExprNodes.ExprNode):
-    """
-    obj  - some temp node
-    """
-
-    type = PyrexTypes.c_void_ptr_ptr_type
-    is_temp = False
-    subexprs = ["obj"]
-
-    def analyse_types(self, env):
-        self.obj = self.obj.analyse_types(env)
-        assert self.obj.type.is_pyobject, repr(self.obj.type)
-        return self
-
-    def generate_result_code(self, code):
-        self.obj.generate_result_code(code)
-
-    def calculate_result_code(self):
-        return "&%s" % self.obj.result()
-
-
 class LazyCoerceToPyObject(ExprNodes.ExprNode):
     """
     Just calls "self.arg.coerce_to_pyobject" when it's analysed,
@@ -2128,3 +2094,147 @@ class LazyCoerceToBool(ExprNodes.ExprNode):
 
     def analyse_types(self, env):
         return self.arg.analyse_boolean_expression(env)
+
+def generate_binop_tree_from_list(pos, operator, list_of_tests):
+    """
+    Given a list of operands generates a roughly balanced tree:
+    (test1 op test2) op (test3 op test4)
+    This is better than (((test1 op test2) op test3) op test4)
+    because it generates a shallower tree of nodes so is
+    less likely to overflow the compiler
+    """
+    len_tests = len(list_of_tests)
+    if len_tests == 1:
+        return list_of_tests[0]
+    else:
+        split_idx = len_tests // 2
+        operand1 = generate_binop_tree_from_list(
+            pos, operator, list_of_tests[:split_idx]
+        )
+        operand2 = generate_binop_tree_from_list(
+            pos, operator, list_of_tests[split_idx:]
+        )
+        return ExprNodes.binop_node(
+            pos,
+            operator=operator,
+            operand1=operand1,
+            operand2=operand2
+        )
+
+
+class MappingOrClassComparisonNode(ExprNodes.ExprNode):
+    """
+    Combined with MappingOrClassComparisonNodeInner this is responsible 
+    for setting up up the arrays of subjects and keys that are used in
+    the function calls that handle these types of patterns
+
+    Note that self.keys_array is owned by this but used by
+    MappingOrClassComparisonNodeInner - that's mainly to ensure that
+    it gets evaluated in the correct order
+    """
+    subexprs = ["keys_array", "inner"]
+    
+    keys_array_cname = "__pyx_match_mapping_keys"
+    subjects_array_cname = "__pyx_match_mapping_subjects"
+
+    @property
+    def type(self):
+        return self.inner.type
+
+    @classmethod
+    def make_keys_node(cls, pos):
+        return ExprNodes.RawCNameExprNode(
+            pos,
+            type=PyrexTypes.c_void_ptr_type,
+            cname=cls.keys_array_cname
+        )
+
+    @classmethod
+    def make_subjects_node(cls, pos):
+        return ExprNodes.RawCNameExprNode(
+            pos,
+            type=PyrexTypes.c_void_ptr_ptr_type,
+            cname=cls.subjects_array_cname
+        )
+
+    def __init__(self, pos, arg, subjects_array, **kwds):
+        super(MappingOrClassComparisonNode, self).__init__(pos, **kwds)
+        self.inner = MappingOrClassComparisonNodeInner(
+            pos,
+            arg=arg,
+            keys_array = self.keys_array,
+            subjects_array = subjects_array
+        )
+
+    def analyse_types(self, env):
+        self.inner = self.inner.analyse_types(env)
+        self.keys_array = [
+            key.analyse_types(env).coerce_to_simple(env) for key in self.keys_array
+        ]
+        return self
+
+    def generate_result_code(self, code):
+        pass
+
+    def calculate_result_code(self):
+        return self.inner.calculate_result_code()
+
+
+class MappingOrClassComparisonNodeInner(ExprNodes.ExprNode):
+    """
+    Sets up the arrays of subjects and keys
+
+    Created by the constructor of MappingComparisonNode
+    (no need to create directly)
+
+    has attributes:
+    * arg  - the main comparison node
+    * keys_array - list of ExprNodes representing keys
+    * subjects_array - list of ExprNodes representing subjects
+    """
+    subexprs = ['arg']
+
+    @property
+    def type(self):
+        return self.arg.type
+
+    def analyse_types(self, env):
+        self.arg = self.arg.analyse_types(env)
+        for n in range(len(self.keys_array)):
+            key = self.keys_array[n].analyse_types(env)
+            key = key.coerce_to_pyobject(env)
+            self.keys_array[n] = key
+        assert self.arg.type is PyrexTypes.c_bint_type
+        return self
+
+    def generate_evaluation_code(self, code):
+        code.putln("{")
+        keys_str = ", ".join(k.result() for k in self.keys_array)
+        if not keys_str:
+            # GCC gets worried about overflow if we pass
+            # a genuinely empty array
+            keys_str = "NULL"
+        code.putln("PyObject *%s[] = {%s};" % (
+            MappingOrClassComparisonNode.keys_array_cname,
+            keys_str,
+        ))
+        subjects_str = ", ".join(
+            "&"+subject.result() if subject is not None else "NULL" for subject in self.subjects_array
+        )
+        if not subjects_str:
+            # GCC gets worried about overflow if we pass
+            # a genuinely empty array
+            subjects_str = "NULL"
+        code.putln("PyObject **%s[] = {%s};" % (
+            MappingOrClassComparisonNode.subjects_array_cname,
+            subjects_str
+        ))
+        super(MappingOrClassComparisonNodeInner, self).generate_evaluation_code(code)
+        
+        code.putln("}")
+
+    def generate_result_code(self, code):
+        pass
+
+    def calculate_result_code(self):
+        return self.arg.result()
