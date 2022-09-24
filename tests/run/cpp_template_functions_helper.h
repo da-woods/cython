@@ -64,3 +64,8 @@ class double_pair : public std::pair<double, double> {
   public:
     double_pair(double x, double y) : std::pair<double, double>(x, y) { };
 };
+
+template <typename T>
+T one_param_const_partial(const std::vector<T>& x) {
+    return x.first();
+}

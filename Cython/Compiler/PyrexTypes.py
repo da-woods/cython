@@ -3966,11 +3966,36 @@ class CppClassType(CType):
         return self.specialize(dict(zip(self.templates, template_values)))
 
     def specialize(self, values):
+        if self.template_type:
+            # This can happen when a template type is used as a function argument
+            # but with a different placeholder name (e.g. the original declaration
+            # was vector[T] but the argument was vector[L]). In which case the
+            # right thing to do is to defer back to the template type
+            assert len(self.templates) == len(self.template_type.templates)
+            new_values = {}
+            template_values_so_far = []
+            for k_old, k_new in zip(self.templates, self.template_type.templates):
+                if k_old in values:
+                    v = values[k_old]
+                    new_values[k_new] = v
+                    template_values_so_far.append(v)
+                elif isinstance(k_old, TemplatePlaceholderType):
+                    # fill in the default arguments (copied from "specialize_here")
+                    partial_specialization = self.declaration_code('', template_params=template_values_so_far)
+                    new_values[k_new] = TemplatePlaceholderType(
+                        "%s::%s" % (partial_specialization, k_new.name), True)
+                else:
+                    template_values_so_far.append(k_old)
+                    new_values[k_new] = k_old
+
+            print(new_values)
+            return self.template_type.specialize(new_values)
+
         if not self.templates and not self.namespace:
             return self
         if self.templates is None:
             self.templates = []
-        key = tuple(values.items())
+        key = tuple(sorted(list(values.items())))
         if key in self.specializations:
             return self.specializations[key]
         template_values = [t.specialize(values) for t in self.templates]
@@ -4771,7 +4796,12 @@ def best_match(arg_types, functions, pos=None, env=None, args=None):
                 errors.append((func, "Unable to deduce type parameter %s" % (
                     ", ".join([param.name for param in set(func_type.templates) - set(deductions.keys())]))))
             else:
-                type_list = [deductions[param] for param in func_type.templates]
+                try:
+                    type_list = [deductions[param] for param in func_type.templates]
+                except KeyError:
+                    print([ k == func_type.templates[0] for k in deductions.keys()])
+                    import pdb; pdb.set_trace()
+                    raise
                 from .Symtab import Entry
                 specialization = Entry(
                     name = func.name + "[%s]" % ",".join([str(t) for t in type_list]),

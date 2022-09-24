@@ -22,6 +22,7 @@ cdef extern from "cpp_template_functions_helper.h":
     cdef T* pointer_param[T](T*)
     cdef cppclass double_pair(pair[double, double]):
         double_pair(double, double)
+    cdef U one_param_const_partial[U](vector[U] v)
 
 def test_no_arg():
     """
@@ -119,3 +120,14 @@ def test_overload_GH1583():
     assert a.overloaded("s", v) == 0.25
     # GH Issue #1584
     # assert a.overloaded[double](v) == 0.25
+
+ctypedef int int_typedef
+
+def test_one_param_const_partial_GH2211():
+    """
+    >>> test_one_param_const_partial_GH2211()
+    101
+    """
+    cdef vector[int_typedef] v
+    v.push_back(101)
+    return one_param_const_partial[int_typedef](v)
