@@ -364,6 +364,7 @@ def generate_init_code(code, init, node, fields, kw_only):
 
     function_start_point = code.insertion_point()
     code = code.insertion_point()
+    code.indent()
 
     # create a temp to get _HAS_DEFAULT_FACTORY
     dataclass_module = make_dataclasses_module_callnode(node.pos)
@@ -403,30 +404,30 @@ def generate_init_code(code, init, node, fields, kw_only):
             continue
         elif field.default_factory is MISSING:
             if field.init.value:
-                code.putln(u"    %s.%s = %s" % (selfname, name, name))
+                code.putln(u"%s.%s = %s" % (selfname, name, name))
             elif assignment:
                 # not an argument to the function, but is still initialized
-                code.putln(u"    %s.%s%s" % (selfname, name, assignment))
+                code.putln(u"%s.%s%s" % (selfname, name, assignment))
         else:
             ph_name = code.new_placeholder(fields, field.default_factory)
             if field.init.value:
                 # close to:
                 # def __init__(self, name=_PLACEHOLDER_VALUE):
                 #     self.name = name_default_factory() if name is _PLACEHOLDER_VALUE else name
-                code.putln(u"    %s.%s = %s() if %s is %s else %s" % (
+                code.putln(u"%s.%s = %s() if %s is %s else %s" % (
                     selfname, name, ph_name, name, default_factory_placeholder, name))
             else:
                 # still need to use the default factory to initialize
-                code.putln(u"    %s.%s = %s()" % (
+                code.putln(u"%s.%s = %s()" % (
                     selfname, name, ph_name))
 
     if node.scope.lookup("__post_init__"):
         post_init_vars = ", ".join(name for name, field in fields.items()
                                    if field.is_initvar)
-        code.putln("    %s.__post_init__(%s)" % (selfname, post_init_vars))
+        code.putln("%s.__post_init__(%s)" % (selfname, post_init_vars))
 
     if code.empty():
-        code.putln("    pass")
+        code.putln("pass")
 
     args = u", ".join(args)
     function_start_point.putln(u"def __init__(%s):" % args)
@@ -446,14 +447,14 @@ def generate_repr_code(code, repr, node, fields):
     if not repr or node.scope.lookup("__repr__"):
         return
 
-    code.putln("def __repr__(self):")
-    strs = [u"%s={self.%s!r}" % (name, name)
-            for name, field in fields.items()
-            if field.repr.value and not field.is_initvar]
-    format_string = u", ".join(strs)
+    with code.indenter("def __repr__(self):"):
+        strs = [u"%s={self.%s!r}" % (name, name)
+                for name, field in fields.items()
+                if field.repr.value and not field.is_initvar]
+        format_string = u", ".join(strs)
 
-    code.putln(u'    name = getattr(type(self), "__qualname__", type(self).__name__)')
-    code.putln(u"    return f'{name}(%s)'" % format_string)
+        code.putln(u'name = getattr(type(self), "__qualname__", type(self).__name__)')
+        code.putln(u"return f'{name}(%s)'" % format_string)
 
 
 def generate_cmp_code(code, op, funcname, node, fields):
@@ -462,37 +463,37 @@ def generate_cmp_code(code, op, funcname, node, fields):
 
     names = [name for name, field in fields.items() if (field.compare.value and not field.is_initvar)]
 
-    code.add_code_lines([
-        "def %s(self, other):" % funcname,
-        "    if not isinstance(other, %s):" % node.class_name,
-        "        return NotImplemented",
+    with code.indenter("def %s(self, other):" % funcname):
+        code.add_code_lines([
+            "if not isinstance(other, %s):" % node.class_name,
+            "    return NotImplemented",
+            #
+            "cdef %s other_cast" % node.class_name,
+            "other_cast = <%s>other" % node.class_name,
+        ])
+
+        # The Python implementation of dataclasses.py does a tuple comparison
+        # (roughly):
+        #  return self._attributes_to_tuple() {op} other._attributes_to_tuple()
         #
-        "    cdef %s other_cast" % node.class_name,
-        "    other_cast = <%s>other" % node.class_name,
-    ])
+        # For the Cython implementation a tuple comparison isn't an option because
+        # not all attributes can be converted to Python objects and stored in a tuple
+        #
+        # TODO - better diagnostics of whether the types support comparison before
+        #    generating the code. Plus, do we want to convert C structs to dicts and
+        #    compare them that way (I think not, but it might be in demand)?
+        checks = []
+        for name in names:
+            checks.append("(self.%s %s other_cast.%s)" % (
+                name, op, name))
 
-    # The Python implementation of dataclasses.py does a tuple comparison
-    # (roughly):
-    #  return self._attributes_to_tuple() {op} other._attributes_to_tuple()
-    #
-    # For the Cython implementation a tuple comparison isn't an option because
-    # not all attributes can be converted to Python objects and stored in a tuple
-    #
-    # TODO - better diagnostics of whether the types support comparison before
-    #    generating the code. Plus, do we want to convert C structs to dicts and
-    #    compare them that way (I think not, but it might be in demand)?
-    checks = []
-    for name in names:
-        checks.append("(self.%s %s other_cast.%s)" % (
-            name, op, name))
-
-    if checks:
-        code.putln("    return " + " and ".join(checks))
-    else:
-        if "=" in op:
-            code.putln("    return True")  # "() == ()" is True
+        if checks:
+            code.putln("return " + " and ".join(checks))
         else:
-            code.putln("    return False")
+            if "=" in op:
+                code.putln("return True")  # "() == ()" is True
+            else:
+                code.putln("return False")
 
 
 def generate_eq_code(code, eq, node, fields):
@@ -584,10 +585,8 @@ def generate_hash_code(code, unsafe_hash, eq, frozen, node, fields):
         hash_tuple_items += u","  # ensure that one arg form is a tuple
 
     # if we're here we want to generate a hash
-    code.add_code_lines([
-        "def __hash__(self):",
-        "    return hash((%s))" % hash_tuple_items,
-    ])
+    with code.indenter("def __hash__(self):"):
+        code.putln("return hash((%s))" % hash_tuple_items)
 
 
 def get_field_type(pos, entry):
