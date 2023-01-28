@@ -23,6 +23,11 @@ fused_type3 = cython.fused_type(int, double)
 fused_composite = cython.fused_type(fused_type2, fused_type3)
 just_float = cython.fused_type(float)
 
+ctypedef int inttypedef
+ctypedef double doubletypedef
+fused_with_typedef = cython.fused_type(inttypedef, doubletypedef)
+
+
 def test_pure():
     """
     >>> test_pure()
@@ -555,3 +560,13 @@ def test_fused_func_pointer_multilevel():
     """
     print(call_function_that_calls_fused_pointer(call_func_pointer_with_1[double, int]))
     print(call_function_that_calls_fused_pointer(call_func_pointer_with_1[float, int]))
+
+
+def constfused_with_typedef(const fused_with_typedef[:] x):
+    """
+    >>> constfused_with_typedef(get_array(8, 'd'))
+    5.0
+    >>> constfused_with_typedef(get_intc_array())
+    5
+    """
+    return x[5]
