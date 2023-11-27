@@ -1,5 +1,6 @@
 
 //////////////////// CythonFunctionShared.proto ////////////////////
+// @requires: ExtensionTypes.c::CallTypeTraverse
 
 #define __Pyx_CyFunction_USED
 
@@ -699,6 +700,10 @@ static void __Pyx_CyFunction_dealloc(__pyx_CyFunctionObject *m)
 
 static int __Pyx_CyFunction_traverse(__pyx_CyFunctionObject *m, visitproc visit, void *arg)
 {
+    {
+        int e = __Pyx_call_type_traverse((PyObject*)m, 1, visit, arg);
+        if (e) return e;
+    }
     Py_VISIT(m->func_closure);
 #if CYTHON_COMPILING_IN_LIMITED_API
     Py_VISIT(m->func);
@@ -1311,6 +1316,7 @@ __pyx_FusedFunction_traverse(__pyx_FusedFunctionObject *self,
                              visitproc visit,
                              void *arg)
 {
+    // Visiting the type is handled in the CyFunction traverse if needed
     Py_VISIT(self->self);
     Py_VISIT(self->__signatures__);
     return __Pyx_CyFunction_traverse((__pyx_CyFunctionObject *) self, visit, arg);
