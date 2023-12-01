@@ -1929,7 +1929,8 @@ class ModuleNode(Nodes.Node, Nodes.BlockNode):
             code.putln(f"e = __Pyx_call_type_traverse(o, {int(not maybe_needs_type_traverse)}, v, a);")
             code.putln("if (e) return e;")
             code.putln("}")
-            code.globalstate.use_utility_code("CallTypeTraverse", "ExtensionTypes.c")
+            code.globalstate.use_utility_code(
+                UtilityCode.load_cached("CallTypeTraverse", "ExtensionTypes.c"))
 
         for entry in py_attrs:
             var_code = "p->%s" % entry.cname
