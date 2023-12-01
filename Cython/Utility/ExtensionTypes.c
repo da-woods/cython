@@ -673,7 +673,7 @@ static int __Pyx_call_type_traverse(PyObject *o, int always_call, visitproc visi
             return 0;
         }
     }
-    Py_VISIT((PyObject*)Py_TYPE(o), visit, arg);
+    Py_VISIT((PyObject*)Py_TYPE(o));
     return 0;
 }
 #endif

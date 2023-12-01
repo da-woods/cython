@@ -1,6 +1,5 @@
 
 //////////////////// CythonFunctionShared.proto ////////////////////
-// @requires: ExtensionTypes.c::CallTypeTraverse
 
 #define __Pyx_CyFunction_USED
 
@@ -119,6 +118,7 @@ static PyObject * __Pyx_CyFunction_Vectorcall_FASTCALL_KEYWORDS_METHOD(PyObject 
 //@requires: ObjectHandling.c::PyVectorcallFastCallDict
 //@requires: ModuleSetupCode.c::IncludeStructmemberH
 //@requires: ObjectHandling.c::PyObjectGetAttrStr
+//@requires: ExtensionTypes.c::CallTypeTraverse
 
 #if CYTHON_COMPILING_IN_LIMITED_API
 static CYTHON_INLINE int __Pyx__IsSameCyOrCFunction(PyObject *func, void *cfunc) {
