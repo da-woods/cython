@@ -331,6 +331,7 @@ class Scope:
     # var_entries       [Entry]            User-defined variable entries
     # pyfunc_entries    [Entry]            Python function entries
     # cfunc_entries     [Entry]            C function entries
+    # unspecialized_cfunc_entries [Entry]  Unspecialized fused C functions end up here
     # c_class_entries   [Entry]            All extension type entries
     # cname_to_entry    {string : Entry}   Temp cname to entry mapping
     # return_type       PyrexType or None  Return type of function owning scope
@@ -400,6 +401,7 @@ class Scope:
         self.var_entries = []
         self.pyfunc_entries = []
         self.cfunc_entries = []
+        self.unspecialized_cfunc_entries = []
         self.c_class_entries = []
         self.defined_c_classes = []
         self.imported_c_classes = {}
@@ -2635,7 +2637,7 @@ class CClassScope(ClassScope):
             if base_entry.type.is_fused:
                 base_entry.type.get_all_specialized_function_types()
 
-        for base_entry in base_scope.cfunc_entries:
+        for base_entry in (base_scope.cfunc_entries+base_scope.unspecialized_cfunc_entries):
             cname = base_entry.cname
             var_entry = base_entry.as_variable
             is_builtin = var_entry and var_entry.is_builtin

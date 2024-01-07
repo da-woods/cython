@@ -3427,6 +3427,8 @@ class CFuncType(CType):
             cfunc_entries.extend(new_cfunc_entries)
         else:
             cfunc_entries[cindex:cindex+1] = new_cfunc_entries
+        self.entry.scope.unspecialized_cfunc_entries.append(self.entry)
+
 
         self.cached_specialized_types = result
 

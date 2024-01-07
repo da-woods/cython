@@ -181,7 +181,7 @@ cdef class Subclass(TestFusedExtMethods):
 cdef Subclass myobj = Subclass()
 assert myobj.method[int, float](5, 5.0) == -10
 
-cdef float (*meth)(Subclass, int, float)
+cdef float (*meth)(TestFusedExtMethods, int, float)
 meth = myobj.method
 assert meth(myobj, 5, 5.0) == -10
 
