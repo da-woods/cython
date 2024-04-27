@@ -4267,6 +4267,25 @@ class IndexNode(_IndexingBaseNode):
         else:
             self.type_indices = self.parse_index_as_types(env)
             self.index = None  # FIXME: use a dedicated Node class instead of generic IndexNode
+
+            if base_type.entry.overloaded_alternatives:
+                # There may be overloaded template types. C++ would probably be cleverer
+                # here about allowing partial matches
+                possible_alternative_entries = []
+                for alternative in base_type.entry.all_alternatives():
+                    if (alternative.type.templates and
+                            len(alternative.type.templates) == len(self.type_indices)):
+                        possible_alternative_entries.append(alternative)
+                if len(possible_alternative_entries) > 1:
+                    warn(self.pos,
+                        "Multiple overloaded template functions with the same "
+                        "number of template parameters.",
+                        2)
+                if possible_alternative_entries:
+                    # Note arbitrary choice in the case of more than one possibility
+                    base_type = possible_alternative_entries[0].type
+
+
             if base_type.templates is None:
                 error(self.pos, "Can only parameterize template functions.")
                 self.type = error_type
