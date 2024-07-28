@@ -222,6 +222,15 @@ class TreeVisitor:
                 result[attr] = childretval
         return result
 
+    def _visit_specific_child(self, parent, child, attr):
+        if child is not None:
+            if type(child) is list:
+                childretval = [self._visitchild(x, parent, attr, idx) for idx, x in enumerate(child)]
+            else:
+                childretval = self._visitchild(child, parent, attr, None)
+                assert not isinstance(childretval, list), 'Cannot insert list here: %s in %r' % (attr, parent)
+            return childretval
+
 
 class VisitorTransform(TreeVisitor):
     """
@@ -285,6 +294,71 @@ class VisitorTransform(TreeVisitor):
 
     def __call__(self, root):
         return self._visit(root)
+
+
+if False: #not cython.compiled and not sys.implementation == "cpython":
+    def visitchildren_replacement(self, parent, attrs, exclude):
+        if parent is None: return None
+        result = {}
+
+        try:
+            f = type(parent).__dict__['visitchildren_handler']
+        except KeyError:
+            make_visit_handlers(parent)
+            f = type(parent).__dict__['visitchildren_handler']
+        return f(parent, self, attrs, exclude)
+
+    TreeVisitor._visitchildren = visitchildren_replacement
+
+    def processchildren_replacement(self, parent, attrs=None, exclude=None):
+        if parent is None: return None
+        try:
+            f = type(parent).__dict__['processchildren_handler']
+        except KeyError:
+            make_visit_handlers(parent)
+            f = type(parent).__dict__['processchildren_handler']
+        return f(parent, self, attrs, exclude)
+
+    VisitorTransform._process_children = processchildren_replacement
+
+    def make_visit_handlers(self):
+        # allow it to be specifically overridden
+        if "visitchildren_handler" not in type(self).__dict__:
+            body = ["def visitchildren_handler(self, visitor, attrs, exclude):",
+                    "result = {}",
+                    f"assert self.child_attrs == {self.child_attrs}, (self.child_attrs, {self.child_attrs})"]
+            for attr in self.child_attrs:
+                body.append(f"if ((attrs is None or '{attr}' in attrs) and")
+                body.append(f"        (exclude is None or '{attr}' not in exclude)):")
+                body.append(f"    child = self.{attr}")
+                body.append(f"    childresult = visitor._visit_specific_child(self, child, '{attr}')")
+                body.append(f"    result['{attr}'] = childresult")
+            body.append("return result")
+            body.append("")
+            funcdef = "\n    ".join(body)
+            d = {}
+            exec(funcdef, d, d)
+            type(self).visitchildren_handler = d['visitchildren_handler']
+        # allow it to be specifically overridden
+        if "processchildren_handler"  not in type(self).__dict__:
+            body = ["def processchildren_handler(self, visitor, attrs, exclude):",
+                    "result = {}",
+                    f"assert self.child_attrs == {self.child_attrs}, (self.child_attrs, {self.child_attrs})"]
+            for attr in self.child_attrs:
+                body.append(f"if ((attrs is None or '{attr}' in attrs) and")
+                body.append(f"        (exclude is None or '{attr}' not in exclude)):")
+                body.append(f"    child = self.{attr}")
+                body.append(f"    childresult = visitor._visit_specific_child(self, child, '{attr}')")
+                body.append(f"    result['{attr}'] = childresult")
+                body.append( "    if type(childresult) is list:")
+                body.append( "        childresult = visitor._flatten_list(childresult)")
+                body.append(f"    self.{attr} = childresult")
+            body.append("return result")
+            body.append("")
+            funcdef = "\n    ".join(body)
+            d = {}
+            exec(funcdef, d, d)
+            type(self).processchildren_handler = d['processchildren_handler']
 
 
 class CythonTransform(VisitorTransform):
