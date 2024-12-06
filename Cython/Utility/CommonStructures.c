@@ -21,6 +21,15 @@ static PyTypeObject* __Pyx_FetchCommonTypeFromSpec(PyObject *module, PyType_Spec
 //@requires: FetchSharedCythonModule
 //@requires:StringTools.c::IncludeStringH
 
+// Threading note:
+// There's a marginal chance (especially on free-threading builds) that some other module is being
+// imported simultaneously and manages to set the cached type in the time between us checking it
+// and us setting it the the shared module.
+// We minimize (but not eliminate) that chance by with a critical section on the shared module.
+// Ultimately though, we re-check the shared module just before setting the type in the shared
+// module. The critical section should be enough to prevent any further changes between this
+// get and set (provided that users aren't messing with the common module manually themselves).
+
 static int __Pyx_VerifyCachedType(PyObject *cached_type,
                                const char *name,
                                Py_ssize_t basicsize,
@@ -50,8 +59,12 @@ static PyTypeObject* __Pyx_FetchCommonType(PyTypeObject* type) {
     // get the final part of the object name (after the last dot)
     object_name = strrchr(type->tp_name, '.');
     object_name = object_name ? object_name+1 : type->tp_name;
+    #if PY_MAJOR_VERSION >= 0x030d0000 && !CYTHON_COMPILING_IN_LIMITED_API
+    Py_BEGIN_CRITICAL_SECTION(abi_module);
+    #endif
     cached_type = (PyTypeObject*) PyObject_GetAttrString(abi_module, object_name);
     if (cached_type) {
+        check_cached_type:
         if (__Pyx_VerifyCachedType(
               (PyObject *)cached_type,
               object_name,
@@ -65,25 +78,36 @@ static PyTypeObject* __Pyx_FetchCommonType(PyTypeObject* type) {
     if (!PyErr_ExceptionMatches(PyExc_AttributeError)) goto bad;
     PyErr_Clear();
     if (PyType_Ready(type) < 0) goto bad;
+
+    // See "threading note" at the top of this utility code section
+    cached_type = (PyTypeObject*) PyObject_GetAttrString(abi_module, object_name);
+    if (unlikely(cached_type)) goto check_cached_type;
+    if (!PyErr_ExceptionMatches(PyExc_AttributeError)) goto bad;
+    PyErr_Clear();
     if (PyObject_SetAttrString(abi_module, object_name, (PyObject *)type) < 0)
         goto bad;
     Py_INCREF(type);
     cached_type = type;
 
+    if ((0)) {
+bad:
+        Py_XDECREF(cached_type);
+        cached_type = NULL;
+        goto done;
+    }
+
 done:
+    #if PY_MAJOR_VERSION >= 0x030d0000 && !CYTHON_COMPILING_IN_LIMITED_API
+    Py_END_CRITICAL_SECTION(abi_module);
+    #endif
     Py_DECREF(abi_module);
     // NOTE: always returns owned reference, or NULL on error
     return cached_type;
-
-bad:
-    Py_XDECREF(cached_type);
-    cached_type = NULL;
-    goto done;
 }
 #else
 
 static PyTypeObject *__Pyx_FetchCommonTypeFromSpec(PyObject *module, PyType_Spec *spec, PyObject *bases) {
-    PyObject *abi_module, *cached_type = NULL;
+    PyObject *abi_module, *cached_type = NULL, *type = NULL;
     // get the final part of the object name (after the last dot)
     const char* object_name = strrchr(spec->name, '.');
     object_name = object_name ? object_name+1 : spec->name;
@@ -91,8 +115,13 @@ static PyTypeObject *__Pyx_FetchCommonTypeFromSpec(PyObject *module, PyType_Spec
     abi_module = __Pyx_FetchSharedCythonABIModule();
     if (!abi_module) return NULL;
 
+    #if PY_MAJOR_VERSION >= 0x030d0000 && !CYTHON_COMPILING_IN_LIMITED_API
+    Py_BEGIN_CRITICAL_SECTION(abi_module);
+    #endif
     cached_type = PyObject_GetAttrString(abi_module, object_name);
+
     if (cached_type) {
+check_cached_type:
         Py_ssize_t basicsize;
 #if CYTHON_COMPILING_IN_LIMITED_API
         PyObject *py_basicsize;
@@ -119,21 +148,37 @@ static PyTypeObject *__Pyx_FetchCommonTypeFromSpec(PyObject *module, PyType_Spec
     PyErr_Clear();
     // We pass the ABI module reference to avoid keeping the user module alive by foreign type usages.
     CYTHON_UNUSED_VAR(module);
-    cached_type = __Pyx_PyType_FromModuleAndSpec(abi_module, spec, bases);
-    if (unlikely(!cached_type)) goto bad;
-    if (unlikely(__Pyx_fix_up_extension_type_from_spec(spec, (PyTypeObject *) cached_type) < 0)) goto bad;
-    if (PyObject_SetAttrString(abi_module, object_name, cached_type) < 0) goto bad;
+    type = __Pyx_PyType_FromModuleAndSpec(abi_module, spec, bases);
+    if (unlikely(!type)) goto bad;
+    if (unlikely(__Pyx_fix_up_extension_type_from_spec(spec, (PyTypeObject *) type) < 0)) goto bad;
+
+    // See "threading note" at the top of this utility code section
+    cached_type = (PyTypeObject*) PyObject_GetAttrString(abi_module, object_name);
+    if (unlikely(cached_type)) {
+        Py_CLEAR(type);
+        goto check_cached_type;
+    }
+    if (!PyErr_ExceptionMatches(PyExc_AttributeError)) goto bad;
+    PyErr_Clear();
+    if (PyObject_SetAttrString(abi_module, object_name, type) < 0) goto bad;
+    cached_type = type;
+    type = NULL;
+
+    if ((0)) {
+bad:
+        Py_XDECREF(type);
+        Py_XDECREF(cached_type);
+        cached_type = NULL;
+    }
 
 done:
+    #if PY_MAJOR_VERSION >= 0x030d0000 && !CYTHON_COMPILING_IN_LIMITED_API
+    Py_END_CRITICAL_SECTION(abi_module);
+    #endif
     Py_DECREF(abi_module);
     // NOTE: always returns owned reference, or NULL on error
     assert(cached_type == NULL || PyType_Check(cached_type));
     return (PyTypeObject *) cached_type;
-
-bad:
-    Py_XDECREF(cached_type);
-    cached_type = NULL;
-    goto done;
 }
 #endif
 
