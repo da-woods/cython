@@ -12,7 +12,7 @@ class NonManglingModuleScope(Symtab.ModuleScope):
 
     def __init__(self, prefix, *args, **kw):
         self.prefix = prefix
-        self.cython_scope = None
+        self._cython_scope = None
         self.cpp = kw.pop('cpp', False)
         Symtab.ModuleScope.__init__(self, *args, **kw)
 
@@ -46,6 +46,7 @@ class CythonUtilityCodeContext(StringParseContext):
         if self.scope is None:
             self.scope = NonManglingModuleScope(
                 self.prefix, module_name, parent_module=None, context=self, cpp=self.cpp)
+            self.scope._cython_scope = self._cython_scope
 
         return self.scope
 
@@ -123,7 +124,7 @@ class CythonUtilityCode(Code.UtilityCodeBase):
             self.name, compiler_directives=self.compiler_directives,
             cpp=cython_scope.is_cpp() if cython_scope else False)
         context.prefix = self.prefix
-        context.cython_scope = cython_scope
+        context._cython_scope = cython_scope
         #context = StringParseContext(self.name)
         tree = parse_from_strings(
             self.name, self.impl, context=context, allow_struct_enum_decorator=True,
@@ -268,7 +269,8 @@ class CythonUtilityCode(Code.UtilityCodeBase):
 
 
 class CythonSharedUtilityCode:
-    def __init__(self, module_name, context, requires):
+    def __init__(self, module_name, shared_utility_name, context, requires):
+        self.shared_utility_name = shared_utility_name
         self._module_name = module_name
         self.context = context
         self.requires = requires
@@ -277,7 +279,7 @@ class CythonSharedUtilityCode:
         import Cython
         from .Scanning import FileSourceDescriptor
         from .Errors import CompileError
-        qualified_name = '.'.join([Options.use_shared_utility, self._module_name])
+        qualified_name = '.'.join([self.shared_utility_name, self._module_name])
         scope = context
         for name, is_package in scope._split_qualified_name(qualified_name, relative_import=False):
             scope = scope.find_submodule(name, as_package=is_package)
@@ -290,7 +292,9 @@ class CythonSharedUtilityCode:
         try:
             rel_path = qualified_name.replace('.', os.sep) + os.path.splitext(pxd_pathname)[1]
             source_desc = FileSourceDescriptor(pxd_pathname, rel_path)
-            err, result = context.process_pxd(source_desc, scope, qualified_name)
+            err, result = context.process_pxd(
+                source_desc, scope, qualified_name,
+                is_cython_shared_utility=True)
             (pxd_codenodes, pxd_scope) = result
             context.pxds[qualified_name] = (pxd_codenodes, pxd_scope)
             scope.pxd_file_loaded = True

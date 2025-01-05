@@ -60,19 +60,13 @@ class Context:
     #  future_directives     [object]
     #  language_level        int     currently 2 or 3 for Python 2/3
 
-    cython_scope = None
     language_level = None  # warn when not set but default to Py2
 
     def __init__(self, include_directories, compiler_directives, cpp=False,
                  language_level=None, options=None):
-        # cython_scope is a hack, set to False by subclasses, in order to break
-        # an infinite loop.
-        # Better code organization would fix it.
 
-        from . import Builtin, CythonScope
+        from . import Builtin
         self.modules = {"__builtin__" : Builtin.builtin_scope}
-        self.cython_scope = CythonScope.create_cython_scope(self)
-        self.modules["cython"] = self.cython_scope
         self.include_directories = include_directories
         self.future_directives = set()
         self.compiler_directives = compiler_directives
@@ -122,14 +116,14 @@ class Context:
 
     # pipeline creation functions can now be found in Pipeline.py
 
-    def process_pxd(self, source_desc, scope, module_name):
+    def process_pxd(self, source_desc, scope, module_name, is_cython_shared_utility=False):
         from . import Pipeline
         if isinstance(source_desc, FileSourceDescriptor) and source_desc._file_type == 'pyx':
             source = CompilationSource(source_desc, module_name, os.getcwd())
             result_sink = create_default_resultobj(source, self.options)
             pipeline = Pipeline.create_pyx_as_pxd_pipeline(self, result_sink)
             result = Pipeline.run_pipeline(pipeline, source)
-        elif Options.use_shared_utility:
+        elif is_cython_shared_utility:
             from . import ParseTreeTransforms
             transform = ParseTreeTransforms.CnameDirectivesTransform(self)
             before = ParseTreeTransforms.InterpretCompilerDirectives

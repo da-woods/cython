@@ -1343,6 +1343,14 @@ class ModuleScope(Scope):
         '__builtins__', '__name__', '__file__', '__doc__', '__path__',
         '__spec__', '__loader__', '__package__', '__cached__',
     ]
+    _cython_scope = None
+
+    @property
+    def cython_scope(self):
+        if not self._cython_scope:
+            from . import CythonScope
+            self._cython_scope = CythonScope.create_cython_scope(self)
+        return self._cython_scope
 
     def __init__(self, name, parent_module, context, is_package=False):
         from . import Builtin
@@ -1500,6 +1508,11 @@ class ModuleScope(Scope):
             absolute_fallback = True
 
         module_scope = self.global_scope()
+        if module_name == "cython" and not is_relative_import:
+            # Special-case Cython-scope. We want to generate it uniquely for each module
+            # because it depends on compiler directives
+            return module_scope.cython_scope
+        
         return module_scope.context.find_module(
             module_name, from_module=from_module, pos=pos, absolute_fallback=absolute_fallback, relative_import=is_relative_import)
 
