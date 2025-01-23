@@ -2457,6 +2457,11 @@ static int __Pyx_VersionSanityCheck(void); /* proto */
 
 /////////////////////////// PyVersionSanityCheck ///////////////////////
 
+#ifdef _MSC_VER
+#elif defined(HAVE_LIBDL) // In PyPort.h
+#include <dlfcn.h>
+#endif
+
 static int __Pyx_VersionSanityCheck(void) {
   // Implementation notes:
   //  The main thing I'm worried about in mixing up Py_GIL_DISABLED since this is incredibly
@@ -2480,21 +2485,57 @@ static int __Pyx_VersionSanityCheck(void) {
   //  should be consistent enough between builds for this to be OK). This is fragile but
   //  the best we can do.
   //
+  // If possible get our functions from the runtime environment rather than the linker
+  PyObject* (*sys_get_object)(const char*) = NULL;
+  void (*err_set_string)(PyObject*, const char*) = NULL;
+  PyObject* exc_import_error = NULL;
+  int (*run_simple_string_flags)(const char*, PyCompilerFlags *) = NULL;
+  int (*os_snprintf)(char*, size_t, const char*, ...) = NULL;
+  printf("zzzzz\n");
+  exit(2);
+#ifdef _MSC_VER
+  printf("XXXXX\n");
+  HMODULE handle = GetModuleHandle(0); // The currently running exe
+  printf("1 %p\n", handle);
+  exit(1);
+  if (handle != NULL) {
+    sys_get_object = (PyObject*(*)(const char*))GetProcAddress(handle, "PySys_GetObject");
+    err_set_string = (void (*)(PyObject*, const char*))GetProcAddress(handle, "PyErr_SetString");
+    exc_import_error = (PyObject*)GetProcAddress(handle, "PyExc_ImportError");
+    run_simple_string_flags = (int (*)(const char*, PyCompilerFlags*))GetProcAddress(handle, "PyRun_SimpleStringFlags");
+    os_snprintf = (int (*)(char*, size_t, const char*, ...))GetProcAddress(handle, "PyOS_snprintf");
+    printf("2 %p %p\n", sys_get_object, exc_import_error);
+  }
+#elif defined(HAVE_LIBDL) // In PyPort.h
+  void *handle = dlopen(NULL, RTLD_LAZY);
+  if (handle) {
+    sys_get_object = (PyObject*(*)(const char*))dlsym(handle, "PySys_GetObject");
+    err_set_string = (void (*)(PyObject*, const char*))dlsym(handle, "PyErr_SetString");
+    exc_import_error = (PyObject*)dlsym(handle, "PyExc_ImportError");
+    run_simple_string_flags = (int (*)(const char*, PyCompilerFlags*))dlsym(handle, "PyRun_SimpleStringFlags");
+    os_snprintf = (int (*)(char*, size_t, const char*, ...))dlsym(handle, "PyOS_snprintf");
+  }
+#endif
+  if (sys_get_object == NULL) sys_get_object = &PySys_GetObject;
+  if (err_set_string == NULL) err_set_string = &PyErr_SetString;
+  if (exc_import_error == NULL) exc_import_error = PyExc_ImportError;
+  if (run_simple_string_flags == NULL) run_simple_string_flags = &PyRun_SimpleStringFlags;
+  if (os_snprintf == NULL) os_snprintf = &PyOS_snprintf;
   #if CYTHON_COMPILING_IN_CPYTHON
   // from Python 3.8 debug and release builds are ABI compatible so skip the check
   #if PY_VERSION_HEX < 0x03080000
-    if (PySys_GetObject("gettotalrefcount")) {
+    if (sys_get_object("gettotalrefcount")) {
       #ifndef Py_DEBUG
-        PyErr_SetString(
-            PyExc_ImportError,
+        err_set_string(
+            exc_import_error,
             "Module was compiled with a non-debug version of Python but imported into a debug version."
         );
         return -1;
       #endif
     } else {
       #ifdef Py_DEBUG
-        PyErr_SetString(
-            PyExc_ImportError,
+        err_set_string(
+            exc_import_error,
             "Module was compiled with a debug version of Python but imported into a non-debug version."
         );
         return -1;
@@ -2502,7 +2543,7 @@ static int __Pyx_VersionSanityCheck(void) {
     }
   #endif // PY_VERSION_HEX < 0x03080000
   #if PY_VERSION_HEX >= 0x030d0000
-    if (PyRun_SimpleStringFlags(
+    if (run_simple_string_flags(
       "if "
       #ifdef Py_GIL_DISABLED
         "not "
@@ -2510,8 +2551,8 @@ static int __Pyx_VersionSanityCheck(void) {
       "__import__('sysconfig').get_config_var('Py_GIL_DISABLED'): raise ImportError",
       NULL
     ) == -1) {
-        PyErr_SetString(
-            PyExc_ImportError,
+        err_set_string(
+            exc_import_error,
       #ifdef Py_GIL_DISABLED
             "Module was compiled with a freethreading build of Python but imported into a non-freethreading build."
       #else
@@ -2521,18 +2562,18 @@ static int __Pyx_VersionSanityCheck(void) {
       return -1;
     }
   #endif // version hex 3.13+
-    if (PySys_GetObject("getobjects")) {
+    if (sys_get_object("getobjects")) {
       #ifndef Py_TRACE_REFS
-        PyErr_SetString(
-            PyExc_ImportError,
+        err_set_string(
+            exc_import_error,
             "Module was compiled without Py_TRACE_REFS but imported into a build of Python with."
         );
         return -1;
       #endif
     } else {
       #ifdef Py_TRACE_REFS
-        PyErr_SetString(
-            PyExc_ImportError,
+        err_set_string(
+            exc_import_error,
             "Module was compiled with Py_TRACE_REFS but imported into a build of Python without."
         );
         return -1;
@@ -2541,9 +2582,9 @@ static int __Pyx_VersionSanityCheck(void) {
     const char code[] = "if __import__('sys').getsizeof(object()) != %u: raise ImportError";
     char formattedCode[sizeof(code)+50];
     PyOS_snprintf(formattedCode, sizeof(formattedCode), code, (unsigned int)sizeof(PyObject));
-    if (PyRun_SimpleStringFlags(formattedCode, NULL) == -1) {
-      PyErr_SetString(
-        PyExc_ImportError,
+    if (run_simple_string_flags(formattedCode, NULL) == -1) {
+      err_set_string(
+        exc_import_error,
         "Runtime and compile-time PyObject size do not match."
       );
       return -1;
