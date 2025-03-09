@@ -480,7 +480,6 @@ def p_async_statement(s: PyrexScanner, ctx, decorators):
         s.level = ctx.level
         return p_def_statement(s, decorators, is_async_def=True)
     elif decorators:
-        breakpoint()
         s.error("Decorators can only be followed by functions or classes")
     elif s.sy == 'for':
         return p_for_statement(s, is_async=True)
@@ -801,7 +800,6 @@ def p_atom(s: PyrexScanner):
             s.next()
         return result
     else:
-        breakpoint()
         s.error("Expected an identifier or literal")
 
 
@@ -2559,7 +2557,6 @@ def p_statement(s: PyrexScanner, ctx, first_statement: cython.bint = False):
             if s.sy == 'IDENT' and s.systring == 'async':
                 pass  # handled below
             else:
-                breakpoint()
                 s.error("Decorators can only be followed by functions or classes")
     elif s.sy == 'pass' and cdef_flag:
         # empty cdef block
@@ -2592,7 +2589,6 @@ def p_statement(s: PyrexScanner, ctx, first_statement: cython.bint = False):
             if ctx.allow_struct_enum_decorator:
                 tup += (Nodes.CStructOrUnionDefNode, Nodes.CEnumDefNode)
             if not isinstance(node, tup):
-                breakpoint()
                 s.error("Decorators can only be followed by functions or classes")
             node.decorators = decorators
         return node
@@ -2646,7 +2642,6 @@ def p_statement(s: PyrexScanner, ctx, first_statement: cython.bint = False):
                     if s.sy == 'def':
                         return p_async_statement(s, ctx, decorators)
                     elif decorators:
-                        breakpoint()
                         s.error("Decorators can only be followed by functions or classes")
                     s.put_back('IDENT', ident_name, ident_pos)  # re-insert original token
                 if s.sy == 'IDENT' and s.systring == 'match':
@@ -4327,7 +4322,6 @@ def p_cpp_class_attribute(s: PyrexScanner, ctx):
             if ctx.allow_struct_enum_decorator:
                 tup += Nodes.CStructOrUnionDefNode, Nodes.CEnumDefNode
             if not isinstance(node, tup):
-                breakpoint()
                 s.error("Decorators can only be followed by functions or classes")
             node.decorators = decorators
         return node
