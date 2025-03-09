@@ -835,6 +835,15 @@ __pyx_memviewslice_is_contig(const {{memviewslice_name}} mvs, char order, int nd
     return 1;
 }
 
+/////////////// MemviewSliceFormat.proto //////////////
+
+static const char* __pyx_memviewslice_format(const {{memviewslice_name}} mvs); /* proto */
+
+/////////////// MemviewSliceFormat //////////////
+
+static const char* __pyx_memviewslice_format(const {{memviewslice_name}} mvs) {
+    return mvs.memview->view.format;
+}
 
 /////////////// MemviewSliceIndex ///////////////
 

@@ -48,7 +48,7 @@ class Ctx:
     nogil = False
     namespace = None
     templates = None
-    allow_struct_enum_decorator = False
+    allow_struct_enum_decorator = True
 
     def __init__(self, **kwds):
         self.__dict__.update(kwds)
@@ -480,6 +480,7 @@ def p_async_statement(s: PyrexScanner, ctx, decorators):
         s.level = ctx.level
         return p_def_statement(s, decorators, is_async_def=True)
     elif decorators:
+        breakpoint()
         s.error("Decorators can only be followed by functions or classes")
     elif s.sy == 'for':
         return p_for_statement(s, is_async=True)
@@ -800,6 +801,7 @@ def p_atom(s: PyrexScanner):
             s.next()
         return result
     else:
+        breakpoint()
         s.error("Expected an identifier or literal")
 
 
@@ -2532,13 +2534,7 @@ def p_statement(s: PyrexScanner, ctx, first_statement: cython.bint = False):
     cdef_flag: cython.bint = ctx.cdef_flag
     pos = s.position()
     decorators = None
-    if s.sy == 'ctypedef':
-        if ctx.level not in ('module', 'module_pxd'):
-            s.error("ctypedef statement not allowed here")
-        #if ctx.api:
-        #    error(pos, "'api' not allowed with 'ctypedef'")
-        return p_ctypedef_statement(s, ctx)
-    elif s.sy == 'DEF':
+    if s.sy == 'DEF':
         # We used to dep-warn about this but removed the warning again since
         # we don't have a good answer yet for all use cases.
         if s.context.compiler_directives.get("warn.deprecated.DEF", False):
@@ -2563,13 +2559,23 @@ def p_statement(s: PyrexScanner, ctx, first_statement: cython.bint = False):
             if s.sy == 'IDENT' and s.systring == 'async':
                 pass  # handled below
             else:
+                breakpoint()
                 s.error("Decorators can only be followed by functions or classes")
     elif s.sy == 'pass' and cdef_flag:
         # empty cdef block
         return p_pass_statement(s, with_newline=True)
 
     overridable = False
-    if s.sy == 'cdef':
+    if s.sy == 'ctypedef':
+        if ctx.level not in ('module', 'module_pxd'):
+            s.error("ctypedef statement not allowed here")
+        #if ctx.api:
+        #    error(pos, "'api' not allowed with 'ctypedef'")
+        node = p_ctypedef_statement(s, ctx)
+        if decorators is not None and isinstance(node, Nodes.CStructOrUnionDefNode):
+            node.decorators = decorators
+        return node
+    elif s.sy == 'cdef':
         cdef_flag = True
         s.next()
     elif s.sy == 'cpdef':
@@ -2586,6 +2592,7 @@ def p_statement(s: PyrexScanner, ctx, first_statement: cython.bint = False):
             if ctx.allow_struct_enum_decorator:
                 tup += (Nodes.CStructOrUnionDefNode, Nodes.CEnumDefNode)
             if not isinstance(node, tup):
+                breakpoint()
                 s.error("Decorators can only be followed by functions or classes")
             node.decorators = decorators
         return node
@@ -2639,6 +2646,7 @@ def p_statement(s: PyrexScanner, ctx, first_statement: cython.bint = False):
                     if s.sy == 'def':
                         return p_async_statement(s, ctx, decorators)
                     elif decorators:
+                        breakpoint()
                         s.error("Decorators can only be followed by functions or classes")
                     s.put_back('IDENT', ident_name, ident_pos)  # re-insert original token
                 if s.sy == 'IDENT' and s.systring == 'match':
@@ -4319,6 +4327,7 @@ def p_cpp_class_attribute(s: PyrexScanner, ctx):
             if ctx.allow_struct_enum_decorator:
                 tup += Nodes.CStructOrUnionDefNode, Nodes.CEnumDefNode
             if not isinstance(node, tup):
+                breakpoint()
                 s.error("Decorators can only be followed by functions or classes")
             node.decorators = decorators
         return node

@@ -648,11 +648,26 @@ def get_type_information_cname(code, dtype, maxdepth=None):
         else:
             assert False, dtype
 
+        scope = getattr(dtype, 'scope', None)
+        uses_extended_validation = scope and scope.extended_buffer_info
+        if uses_extended_validation:
+            typecode.putln(f"static const __Pyx_BufExtendedValidation {name}_ext[] = {{")
+            for part in scope.extended_buffer_info:
+                type = part[0][len("extended_buffer_"):].upper()
+                typecode.putln(
+                    '{'
+                    f'__PYX_BUF_EXTENDED_VALIDATION_{type}, '
+                    f'{part[1].as_c_string_literal()}, '
+                    f'{part[2].as_c_string_literal()} '
+                    '},')
+            typecode.putln("{0, 0, 0}};")
+
         typeinfo = ('static const __Pyx_TypeInfo %s = '
-                        '{ "%s", %s, sizeof(%s), { %s }, %s, %s, %s, %s };')
+                        '{ "%s", %s, sizeof(%s), { %s }, %s, %s, %s, %s, %s };')
         tup = (name, rep, structinfo_name, declcode,
                ', '.join([str(x) for x in arraysizes]) or '0', len(arraysizes),
-               typegroup, is_unsigned, flags)
+               typegroup, is_unsigned, flags,
+               f"{name}_ext" if uses_extended_validation else '0')
         typecode.putln(typeinfo % tup, safe=True)
 
     return name

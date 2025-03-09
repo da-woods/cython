@@ -375,6 +375,7 @@ class Scope:
     # Do ambiguous type names like 'int' and 'float' refer to the C types? (Otherwise, Python types.)
     in_c_type_context = True
     node_positions_to_offset = {}  # read-only fallback dict
+    extended_buffer_info = None
 
     def __init__(self, name, outer_scope, parent_scope):
         # The outer_scope is the next scope in the lookup chain.

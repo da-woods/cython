@@ -55,11 +55,17 @@ struct __Pyx_StructField_;
 
 #define __PYX_BUF_FLAGS_PACKED_STRUCT (1 << 0)
 
+typedef enum {
+  __PYX_BUF_EXTENDED_VALIDATION_NAME = 1,
+  __PYX_BUF_EXTENDED_VALIDATION_STARTSWITH,
+  __PYX_BUF_EXTENDED_VALIDATION_REGEX
+} __Pyx_BufExtendedValidationType;
+
 typedef struct {
-  int validation_type; /* 1 str-match, 2 startswidth, 3 re */
+  __Pyx_BufExtendedValidationType validation_type; /* 1 str-match, 2 startswidth, 3 re */
   const char *prefix;
   const char *validation_str;
-} __Pyx_ExtendedValidation;
+} __Pyx_BufExtendedValidation;
 
 typedef struct {
   const char* name; /* for error messages only */
@@ -70,7 +76,7 @@ typedef struct {
   char typegroup; /* _R_eal, _C_omplex, Signed _I_nt, _U_nsigned int, _S_truct, _P_ointer, _O_bject, c_H_ar */
   char is_unsigned;
   int flags;
-  const __Pyx_ExtendedValidation *extended_validation;
+  const __Pyx_BufExtendedValidation *extended_validation;
 } __Pyx_TypeInfo;
 
 typedef struct __Pyx_StructField_ {
@@ -209,7 +215,6 @@ static void __Pyx_BufFmt_Init(__Pyx_BufFmt_Context* ctx,
   ctx->enc_type = 0;
   ctx->is_complex = 0;
   ctx->is_valid_array = 0;
-  ctx->has_opaque_type = 0;
   ctx->struct_alignment = 0;
   while (type->typegroup == 'S') {
     ++ctx->head;
@@ -620,20 +625,45 @@ __pyx_buffmt_parse_array(__Pyx_BufFmt_Context* ctx, const char** tsp)
 }
 
 static int __Pyx_BufFmt_AddOpaqueType(__Pyx_BufFmt_Context* ctx, const char *prefix, const char *postfix) {
-  char group;
-  size_t offset, arraysize = 1;
 
   __Pyx_BufFmt_StackElem *head = ctx->head;
   while (1) {
-    const __Pyx_ExtendedValidation* ev = head->field->type->extended_validation;
-    printf("Trying type %s\n", head->field->type->name);
+    const __Pyx_BufExtendedValidation* ev = head->field->type->extended_validation;
     if (ev) {
       while (ev->validation_type) {
-        /* TODO try to validate */
+        if (strcmp(ev->prefix, prefix) != 0) continue;
+        int match = 0;
+        switch (ev->validation_type) {
+          case __PYX_BUF_EXTENDED_VALIDATION_NAME:
+            match = strcmp(ev->validation_str, postfix) == 0;
+            break;
+          case __PYX_BUF_EXTENDED_VALIDATION_STARTSWITH:
+            match = strncmp(ev->validation_str, postfix, strlen(ev->validation_str)) == 0;
+            break;
+          case __PYX_BUF_EXTENDED_VALIDATION_REGEX: {
+            PyObject *re = PyImport_ImportModule("re");
+            if (unlikely(!re)) return -1;
+            PyObject *py_result = PyObject_CallMethod(
+              re,
+              "match",
+              "ss",
+              ev->validation_str,
+              postfix
+            );
+            Py_DECREF(re);
+            if (unlikely(!py_result)) return -1;
+            match = PyObject_IsTrue(py_result);
+            Py_DECREF(py_result);
+            if (unlikely(match == -1)) return -1;
+            break;
+          }
+        }
 
-        // if success
-        ctx->head = head;
-        goto success_;
+        if (match) {
+          ctx->head = head;
+          goto success_;
+        }
+        ++ev;
       }
     }
     if (head->field != &ctx->root) {
@@ -730,9 +760,6 @@ static int __pyx_buffmt_parse_opaque_type(__Pyx_BufFmt_Context* ctx, const char*
     rest[i] = *r;
     ++i;
   }
-
-  PyErr_SetString(PyExc_TypeError, "?");
-  printf("XXXX %s %s\n", prefix, rest);
 
   result = __Pyx_BufFmt_AddOpaqueType(ctx, prefix, rest);
 

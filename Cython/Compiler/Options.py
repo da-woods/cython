@@ -237,6 +237,9 @@ _directive_defaults = {
     'cpp_locals': False,  # uses std::optional for C++ locals, so that they work more like Python locals
     'legacy_implicit_noexcept': False,
     'c_compile_guard': '',
+    'extended_buffer_name': None,
+    'extended_buffer_startswith': None,
+    'extended_buffer_regex': None,
 
     # set __file__ and/or __path__ to known source/target path at import time (instead of not having them available)
     'set_initial_path' : None,  # SOURCEFILE or "/full/path/to/module"
@@ -379,6 +382,9 @@ directive_types = {
     'dataclasses.dataclass': DEFER_ANALYSIS_OF_ARGUMENTS,
     'dataclasses.field': DEFER_ANALYSIS_OF_ARGUMENTS,
     'embedsignature.format': one_of('c', 'clinic', 'python'),
+    'extended_buffer_name': DEFER_ANALYSIS_OF_ARGUMENTS,
+    'extended_buffer_startswith': DEFER_ANALYSIS_OF_ARGUMENTS,
+    'extended_buffer_regex': DEFER_ANALYSIS_OF_ARGUMENTS,
 }
 
 for key, val in _directive_defaults.items():
