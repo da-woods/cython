@@ -1335,6 +1335,10 @@ class InterpretCompilerDirectives(CythonTransform):
     def visit_PyClassDefNode(self, node):
         directives, contents_directives = self._extract_directives(node, 'class')
         return self.visit_with_directives(node, directives, contents_directives)
+    
+    def visit_CStructOrUnionDefNode(self, node):
+        directives, contents_directives = self._extract_directives(node, 'class')
+        return self.visit_with_directives(node, directives, contents_directives)
 
     def _extract_directives(self, node, scope_name):
         """
@@ -1369,6 +1373,14 @@ class InterpretCompilerDirectives(CythonTransform):
                         if current_opt_dict.get(name, missing) != value:
                             if name == 'cfunc' and 'ufunc' in current_opt_dict:
                                 error(dec.pos, "Cannot apply @cfunc to @ufunc, please reverse the decorators.")
+                            if name.startswith('extended_buffer_'):
+                                old_value = current_opt_dict.get(name, [])
+                                if old_value is None:
+                                    old_value = []
+                                old_value.append(value)
+                                value = old_value
+                                directive = (name, value)
+
                             directives.append(directive)
                             current_opt_dict[name] = value
                         else:

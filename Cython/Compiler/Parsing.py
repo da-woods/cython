@@ -48,7 +48,7 @@ class Ctx:
     nogil = False
     namespace = None
     templates = None
-    allow_struct_enum_decorator = False
+    allow_struct_enum_decorator = True
 
     def __init__(self, **kwds):
         self.__dict__.update(kwds)
@@ -2532,13 +2532,7 @@ def p_statement(s: PyrexScanner, ctx, first_statement: cython.bint = False):
     cdef_flag: cython.bint = ctx.cdef_flag
     pos = s.position()
     decorators = None
-    if s.sy == 'ctypedef':
-        if ctx.level not in ('module', 'module_pxd'):
-            s.error("ctypedef statement not allowed here")
-        #if ctx.api:
-        #    error(pos, "'api' not allowed with 'ctypedef'")
-        return p_ctypedef_statement(s, ctx)
-    elif s.sy == 'DEF':
+    if s.sy == 'DEF':
         # We used to dep-warn about this but removed the warning again since
         # we don't have a good answer yet for all use cases.
         if s.context.compiler_directives.get("warn.deprecated.DEF", False):
@@ -2569,7 +2563,16 @@ def p_statement(s: PyrexScanner, ctx, first_statement: cython.bint = False):
         return p_pass_statement(s, with_newline=True)
 
     overridable = False
-    if s.sy == 'cdef':
+    if s.sy == 'ctypedef':
+        if ctx.level not in ('module', 'module_pxd'):
+            s.error("ctypedef statement not allowed here")
+        #if ctx.api:
+        #    error(pos, "'api' not allowed with 'ctypedef'")
+        node = p_ctypedef_statement(s, ctx)
+        if decorators is not None and isinstance(node, Nodes.CStructOrUnionDefNode):
+            node.decorators = decorators
+        return node
+    elif s.sy == 'cdef':
         cdef_flag = True
         s.next()
     elif s.sy == 'cpdef':

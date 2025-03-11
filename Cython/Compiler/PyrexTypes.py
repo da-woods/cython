@@ -281,6 +281,7 @@ class PyrexType(BaseType):
     default_value = ""
     declaration_value = ""
 
+
     def resolve(self):
         # If a typedef, returns the base type.
         return self
@@ -837,6 +838,13 @@ class MemoryViewSliceType(PyrexType):
                             cname=is_contig_name)
 
                 entry.utility_code_definition = MemoryView.get_is_contig_utility(c_or_f, self.ndim)
+        elif attribute == "format":
+            scope.declare_cproperty(
+                "format",
+                c_const_char_ptr_type,
+                "__pyx_memviewslice_format",
+                utility_code=MemoryView.load_memview_c_utility(
+                    "MemviewSliceFormat", MemoryView.context))
 
         return True
 

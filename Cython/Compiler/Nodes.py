@@ -1568,6 +1568,31 @@ class CVarDefNode(StatNode):
                     self.entry.doc = embed_position(self.pos, self.doc)
 
 
+def handle_extended_buffer_part(pos, directive, scope, args, kwds):
+    if len(args) != 2 or kwds:
+        error(pos, f"{directive} takes exactly two positional arguments")
+    from . import ExprNodes
+    if not all(isinstance(arg, ExprNodes.UnicodeNode) for arg in args):
+        error(pos, f"{directive} arguments must be strings")
+    if scope.extended_buffer_info is None:
+        scope.extended_buffer_info = []
+    scope.extended_buffer_info.append((directive, args[0].value, args[1].value))
+
+def handle_extended_buffer(pos, scope, env):
+    extended_buffer_names = env.directives["extended_buffer_name"]
+    if extended_buffer_names:
+        for (args, kwds) in extended_buffer_names:
+            handle_extended_buffer_part(pos, "extended_buffer_name", scope, args, kwds)
+    extended_buffer_startswiths = env.directives["extended_buffer_startswith"]
+    if extended_buffer_startswiths:
+        for (args, kwds) in extended_buffer_startswiths:
+            handle_extended_buffer_part(pos, "extended_buffer_startswidth", scope, args, kwds)
+    extended_buffer_regexes = env.directives["extended_buffer_regex"]
+    if extended_buffer_regexes:
+        for (args, kwds) in extended_buffer_regexes:
+            handle_extended_buffer_part(pos, "extended_buffer_regex", scope, args, kwds)
+
+
 class CStructOrUnionDefNode(StatNode):
     #  name          string
     #  cname         string or None
@@ -1579,8 +1604,11 @@ class CStructOrUnionDefNode(StatNode):
     #  attributes    [CVarDefNode] or None
     #  entry         Entry
     #  packed        boolean
+    #  decorators    usually None, but can be used for directives
 
-    child_attrs = ["attributes"]
+    child_attrs = ["attributes", "decorators"]
+
+    decorators = None
 
     def declare(self, env, scope=None):
         self.entry = env.declare_struct_or_union(
@@ -1605,6 +1633,7 @@ class CStructOrUnionDefNode(StatNode):
                         type = type.base_type
                     if type == self.entry.type:
                         error(attr.pos, "Struct cannot contain itself as a member.")
+        handle_extended_buffer(self.pos, scope, env)
 
     def analyse_expressions(self, env):
         return self
