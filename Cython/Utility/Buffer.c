@@ -679,7 +679,7 @@ static int __Pyx_BufFmt_AddOpaqueType(__Pyx_BufFmt_Context* ctx, const char *pre
     }
   }
 
-  success_:
+  success_:;
   /* Done checking, move to next field, pushing or popping struct stack if needed */
   const __Pyx_StructField* field = ctx->head->field;
   while (1) {
