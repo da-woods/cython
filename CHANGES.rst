@@ -106,7 +106,7 @@ Bugs fixed
 * A compiler hang introduced in 3.1a1 when overriding methods was resolved.
   Patch by Aditya Pillai.  (Github issue :issue:`6704`)
 
-* A compiler crash was resolven when trying to issue a warning.
+* A compiler crash was resolved when trying to issue a warning.
   Patch by Gabriele N. Tornetta.  (Github issue :issue:`6711`)
 
 * Some incomplete import time "safety checks" from 3.1.0a1 were removed again.
