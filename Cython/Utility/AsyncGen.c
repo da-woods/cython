@@ -73,6 +73,13 @@ __Pyx_PyAsyncGen_Fini();
 //@requires: Coroutine.c::ReturnWithStopIteration
 //@requires: ObjectHandling.c::PyObjectCall2Args
 //@requires: ExtensionTypes.c::CallTypeTraverse
+//@requires: ModuleSetupCode.c::CriticalSections
+
+// Note about thread safety:
+// In terms of thread safety, the `int` members of the classes (e.g. running, closed)
+// and __pyx_AwaitableState members need to be protected by critical sections.
+// These usually act as "guards" for what action to take. Once the guard is completed then
+// the action can be taken outside the critical section.
 
 PyDoc_STRVAR(__Pyx_async_gen_send_doc,
 "send(arg) -> send 'arg' into generator,\n\
@@ -166,8 +173,12 @@ __Pyx_async_gen_repr(__pyx_CoroutineObject *o)
 }
 
 
+// Called inside a critical section.
+// Note that the critical section may still end up being interrupted
+// so we take a bit of care with reference counting and not to call
+// firstiter twice.
 static int
-__Pyx_async_gen_init_hooks(__pyx_PyAsyncGenObject *o)
+__Pyx__async_gen_init_hooks(__pyx_PyAsyncGenObject *o)
 {
 #if !CYTHON_COMPILING_IN_PYPY
     PyThreadState *tstate;
@@ -179,8 +190,6 @@ __Pyx_async_gen_init_hooks(__pyx_PyAsyncGenObject *o)
         return 0;
     }
 
-    o->ag_hooks_inited = 1;
-
 #if CYTHON_COMPILING_IN_PYPY
     finalizer = _PyEval_GetAsyncGenFinalizer();
 #else
@@ -188,8 +197,10 @@ __Pyx_async_gen_init_hooks(__pyx_PyAsyncGenObject *o)
     finalizer = tstate->async_gen_finalizer;
 #endif
     if (finalizer) {
-        Py_INCREF(finalizer);
-        o->ag_finalizer = finalizer;
+        if (likely(!o->ag_finalizer)) {
+            Py_INCREF(finalizer);
+            o->ag_finalizer = finalizer;
+        } // else race
     }
 
 #if CYTHON_COMPILING_IN_PYPY
@@ -211,6 +222,12 @@ __Pyx_async_gen_init_hooks(__pyx_PyAsyncGenObject *o)
             res = __Pyx_PyObject_Call2Args(function, self, (PyObject*)o);
         } else
 #endif
+        if (unlikely(o->ag_hooks_inited)) {
+            // race
+            Py_DECREF(firstiter);
+            return 0;
+        }
+        o->ag_hooks_inited = 1;
         res = __Pyx_PyObject_CallOneArg(firstiter, (PyObject*)o);
 
         Py_DECREF(firstiter);
@@ -221,6 +238,16 @@ __Pyx_async_gen_init_hooks(__pyx_PyAsyncGenObject *o)
     }
 
     return 0;
+}
+
+static int
+__Pyx_async_gen_init_hooks(__pyx_PyAsyncGenObject *o)
+{
+    int result;
+    __Pyx_BEGIN_CRITICAL_SECTION(o);
+    result = __Pyx__async_gen_init_hooks(o);
+    __Pyx_END_CRITICAL_SECTION();
+    return result;
 }
 
 
@@ -386,6 +413,9 @@ __Pyx_PyAsyncGen_Fini(void)
 }
 
 
+// __Pyx_async_gen_unwrap_value should be called in a critical section. It does not contain the
+// critical section itself since in most cases it makes sense to combine it with some other
+// protected operations.
 static PyObject *
 __Pyx_async_gen_unwrap_value(__pyx_PyAsyncGenObject *gen, PyObject *result)
 {
@@ -446,16 +476,12 @@ __Pyx_async_gen_asend_traverse(__pyx_PyAsyncGenASend *o, visitproc visit, void *
     return 0;
 }
 
-
-static PyObject *
-__Pyx_async_gen_asend_send(PyObject *g, PyObject *arg)
+// called with a critical section on o and o->ags_gen
+static int __Pyx_async_gen_asend_send_prechecks(__pyx_PyAsyncGenASend *o, PyObject **arg)
 {
-    __pyx_PyAsyncGenASend *o = (__pyx_PyAsyncGenASend*) g;
-    PyObject *retval;
-
     if (unlikely(o->ags_state == __PYX_AWAITABLE_STATE_CLOSED)) {
         PyErr_SetString(PyExc_RuntimeError, __Pyx_ASYNC_GEN_CANNOT_REUSE_SEND_MSG);
-        return NULL;
+        return -1;
     }
 
     if (o->ags_state == __PYX_AWAITABLE_STATE_INIT) {
@@ -463,22 +489,39 @@ __Pyx_async_gen_asend_send(PyObject *g, PyObject *arg)
             PyErr_SetString(
                 PyExc_RuntimeError,
                 "anext(): asynchronous generator is already running");
-            return NULL;
+            return -1;
         }
 
-        if (arg == NULL || arg == Py_None) {
-            arg = o->ags_sendval ? o->ags_sendval : Py_None;
+        if (*arg == NULL || *arg == Py_None) {
+            *arg = o->ags_sendval ? o->ags_sendval : Py_None;
         }
         o->ags_state = __PYX_AWAITABLE_STATE_ITER;
     }
 
     o->ags_gen->ag_running_async = 1;
-    retval = __Pyx_Coroutine_Send((PyObject*)o->ags_gen, arg);
-    retval = __Pyx_async_gen_unwrap_value(o->ags_gen, retval);
+    return 0;
+}
 
+static PyObject *
+__Pyx_async_gen_asend_send(PyObject *g, PyObject *arg)
+{
+    __pyx_PyAsyncGenASend *o = (__pyx_PyAsyncGenASend*) g;
+    PyObject *retval;
+    int precheck_result;
+
+    __Pyx_BEGIN_CRITICAL_SECTION2(o, o->ags_gen);
+    precheck_result = __Pyx_async_gen_asend_send_prechecks(o, &arg);
+    __Pyx_END_CRITICAL_SECTION2();
+    if (unlikely(precheck_result == -1)) return NULL;
+
+    retval = __Pyx_Coroutine_Send((PyObject*)o->ags_gen, arg);
+
+    __Pyx_BEGIN_CRITICAL_SECTION2(o, o->ags_gen);
+    retval = __Pyx_async_gen_unwrap_value(o->ags_gen, retval);
     if (!retval) {
         o->ags_state = __PYX_AWAITABLE_STATE_CLOSED;
     }
+    __Pyx_END_CRITICAL_SECTION2();
 
     return retval;
 }
@@ -495,18 +538,24 @@ static PyObject *
 __Pyx_async_gen_asend_throw(__pyx_PyAsyncGenASend *o, PyObject *args)
 {
     PyObject *result;
+    __pyx_AwaitableState ags_state;
+    __Pyx_BEGIN_CRITICAL_SECTION(o);
+    ags_state = o->ags_state;
+    __Pyx_END_CRITICAL_SECTION();
 
-    if (unlikely(o->ags_state == __PYX_AWAITABLE_STATE_CLOSED)) {
+    if (unlikely(ags_state == __PYX_AWAITABLE_STATE_CLOSED)) {
         PyErr_SetString(PyExc_RuntimeError, __Pyx_ASYNC_GEN_CANNOT_REUSE_SEND_MSG);
         return NULL;
     }
 
     result = __Pyx_Coroutine_Throw((PyObject*)o->ags_gen, args);
-    result = __Pyx_async_gen_unwrap_value(o->ags_gen, result);
 
+    __Pyx_BEGIN_CRITICAL_SECTION2(o, o->ags_gen);
+    result = __Pyx_async_gen_unwrap_value(o->ags_gen, result);
     if (result == NULL) {
         o->ags_state = __PYX_AWAITABLE_STATE_CLOSED;
     }
+    __Pyx_END_CRITICAL_SECTION2();
 
     return result;
 }
@@ -517,7 +566,9 @@ __Pyx_async_gen_asend_close(PyObject *g, PyObject *args)
 {
     __pyx_PyAsyncGenASend *o = (__pyx_PyAsyncGenASend*) g;
     CYTHON_UNUSED_VAR(args);
+    __Pyx_BEGIN_CRITICAL_SECTION(o);
     o->ags_state = __PYX_AWAITABLE_STATE_CLOSED;
+    __Pyx_END_CRITICAL_SECTION();
     Py_RETURN_NONE;
 }
 
@@ -689,57 +740,79 @@ __Pyx_async_gen_athrow_traverse(__pyx_PyAsyncGenAThrow *o, visitproc visit, void
     return 0;
 }
 
-
-static PyObject *
-__Pyx_async_gen_athrow_send(__pyx_PyAsyncGenAThrow *o, PyObject *arg)
-{
+// called with a critical section on o and o->agt_gen
+static __pyx_AwaitableState __Pyx_async_gen_athrow_send_prechecks(__pyx_PyAsyncGenAThrow *o, PyObject *arg) {
     __pyx_CoroutineObject *gen = (__pyx_CoroutineObject*)o->agt_gen;
-    PyObject *retval, *exc_type;
-
     if (unlikely(o->agt_state == __PYX_AWAITABLE_STATE_CLOSED)) {
         PyErr_SetString(PyExc_RuntimeError, __Pyx_ASYNC_GEN_CANNOT_REUSE_CLOSE_MSG);
-        return NULL;
+        return (__pyx_AwaitableState)-1;
     }
 
     if (unlikely(gen->resume_label == -1)) {
         // already run past the end
         o->agt_state = __PYX_AWAITABLE_STATE_CLOSED;
         PyErr_SetNone(PyExc_StopIteration);
+        return (__pyx_AwaitableState)-1;
+    }
+
+    if (o->agt_state != __PYX_AWAITABLE_STATE_INIT)
+        return o->agt_state;
+
+    if (unlikely(o->agt_gen->ag_running_async)) {
+        o->agt_state = __PYX_AWAITABLE_STATE_CLOSED;
+        if (o->agt_args == NULL) {
+            PyErr_SetString(
+                PyExc_RuntimeError,
+                "aclose(): asynchronous generator is already running");
+        } else {
+            PyErr_SetString(
+                PyExc_RuntimeError,
+                "athrow(): asynchronous generator is already running");
+        }
+        return (__pyx_AwaitableState)-1;
+    }
+
+    if (unlikely(o->agt_gen->ag_closed)) {
+        o->agt_state = __PYX_AWAITABLE_STATE_CLOSED;
+        PyErr_SetNone(PyExc_StopAsyncIteration);
+        return (__pyx_AwaitableState)-1;
+    }
+
+    if (unlikely(arg != Py_None)) {
+        PyErr_SetString(PyExc_RuntimeError, __Pyx_NON_INIT_CORO_MSG);
+        return (__pyx_AwaitableState)-1;
+    }
+
+    o->agt_state = __PYX_AWAITABLE_STATE_ITER;
+    o->agt_gen->ag_running_async = 1;
+
+    if (o->agt_args == NULL) {
+        /* aclose() mode */
+        o->agt_gen->ag_closed = 1;
+    }
+
+    return __PYX_AWAITABLE_STATE_INIT;
+}
+
+static PyObject *
+__Pyx_async_gen_athrow_send(__pyx_PyAsyncGenAThrow *o, PyObject *arg)
+{
+    __pyx_CoroutineObject *gen = (__pyx_CoroutineObject*)o->agt_gen;
+    PyObject *retval, *exc_type;
+    __pyx_AwaitableState agt_state;
+
+    __Pyx_BEGIN_CRITICAL_SECTION2(o, gen);
+    agt_state = __Pyx_async_gen_athrow_send_prechecks(o, arg);
+    __Pyx_END_CRITICAL_SECTION2();
+    if (unlikely(agt_state == (__pyx_AwaitableState)-1)) {
         return NULL;
     }
 
-    if (o->agt_state == __PYX_AWAITABLE_STATE_INIT) {
-        if (unlikely(o->agt_gen->ag_running_async)) {
-            o->agt_state = __PYX_AWAITABLE_STATE_CLOSED;
-            if (o->agt_args == NULL) {
-                PyErr_SetString(
-                    PyExc_RuntimeError,
-                    "aclose(): asynchronous generator is already running");
-            } else {
-                PyErr_SetString(
-                    PyExc_RuntimeError,
-                    "athrow(): asynchronous generator is already running");
-            }
-            return NULL;
-        }
-
-        if (unlikely(o->agt_gen->ag_closed)) {
-            o->agt_state = __PYX_AWAITABLE_STATE_CLOSED;
-            PyErr_SetNone(PyExc_StopAsyncIteration);
-            return NULL;
-        }
-
-        if (unlikely(arg != Py_None)) {
-            PyErr_SetString(PyExc_RuntimeError, __Pyx_NON_INIT_CORO_MSG);
-            return NULL;
-        }
-
-        o->agt_state = __PYX_AWAITABLE_STATE_ITER;
-        o->agt_gen->ag_running_async = 1;
-
+    if (agt_state == __PYX_AWAITABLE_STATE_INIT) {
         if (o->agt_args == NULL) {
-            /* aclose() mode */
-            o->agt_gen->ag_closed = 1;
+            /* aclose() mode
+             * `o->agt_gen->ag_closed` set in the prechecks function inside the critical section
+            */
 
             retval = __Pyx__Coroutine_Throw((PyObject*)gen,
                 /* Do not close generator when PyExc_GeneratorExit is passed */
@@ -761,7 +834,9 @@ __Pyx_async_gen_athrow_send(__pyx_PyAsyncGenAThrow *o, PyObject *arg)
             retval = __Pyx__Coroutine_Throw((PyObject*)gen,
                 /* Do not close generator when PyExc_GeneratorExit is passed */
                 typ, val, tb, o->agt_args, 0);
+            __Pyx_BEGIN_CRITICAL_SECTION(o->agt_gen);
             retval = __Pyx_async_gen_unwrap_value(o->agt_gen, retval);
+            __Pyx_END_CRITICAL_SECTION();
         }
         if (retval == NULL) {
             goto check_error;
@@ -773,7 +848,10 @@ __Pyx_async_gen_athrow_send(__pyx_PyAsyncGenAThrow *o, PyObject *arg)
 
     retval = __Pyx_Coroutine_Send((PyObject *)gen, arg);
     if (o->agt_args) {
-        return __Pyx_async_gen_unwrap_value(o->agt_gen, retval);
+        __Pyx_BEGIN_CRITICAL_SECTION(o->agt_gen);
+        retval = __Pyx_async_gen_unwrap_value(o->agt_gen, retval);
+        __Pyx_END_CRITICAL_SECTION();
+        return retval;
     } else {
         /* aclose() mode */
         if (retval) {
@@ -791,15 +869,19 @@ __Pyx_async_gen_athrow_send(__pyx_PyAsyncGenAThrow *o, PyObject *arg)
     }
 
 yield_close:
+    __Pyx_BEGIN_CRITICAL_SECTION2(o, o->agt_gen);
     o->agt_gen->ag_running_async = 0;
     o->agt_state = __PYX_AWAITABLE_STATE_CLOSED;
+    __Pyx_END_CRITICAL_SECTION2();
     PyErr_SetString(
         PyExc_RuntimeError, __Pyx_ASYNC_GEN_IGNORED_EXIT_MSG);
     return NULL;
 
 check_error:
+    __Pyx_BEGIN_CRITICAL_SECTION2(o, o->agt_gen);
     o->agt_gen->ag_running_async = 0;
     o->agt_state = __PYX_AWAITABLE_STATE_CLOSED;
+    __Pyx_END_CRITICAL_SECTION2();
     exc_type = PyErr_Occurred();
     if (__Pyx_PyErr_GivenExceptionMatches2(exc_type, PyExc_StopAsyncIteration, PyExc_GeneratorExit)) {
         if (o->agt_args == NULL) {
@@ -820,20 +902,30 @@ __Pyx_async_gen_athrow_throw(__pyx_PyAsyncGenAThrow *o, PyObject *args)
 {
     PyObject *retval;
 
-    if (unlikely(o->agt_state == __PYX_AWAITABLE_STATE_CLOSED)) {
+    __pyx_AwaitableState agt_state;
+    __Pyx_BEGIN_CRITICAL_SECTION(o);
+    agt_state = o->agt_state;
+    __Pyx_END_CRITICAL_SECTION();
+
+    if (unlikely(agt_state == __PYX_AWAITABLE_STATE_CLOSED)) {
         PyErr_SetString(PyExc_RuntimeError, __Pyx_ASYNC_GEN_CANNOT_REUSE_CLOSE_MSG);
         return NULL;
     }
 
     retval = __Pyx_Coroutine_Throw((PyObject*)o->agt_gen, args);
     if (o->agt_args) {
-        return __Pyx_async_gen_unwrap_value(o->agt_gen, retval);
+        __Pyx_BEGIN_CRITICAL_SECTION(o->agt_gen);
+        retval = __Pyx_async_gen_unwrap_value(o->agt_gen, retval);
+        __Pyx_END_CRITICAL_SECTION();
+        return retval;
     } else {
         // aclose() mode
         PyObject *exc_type;
         if (unlikely(retval && __pyx__PyAsyncGenWrappedValue_CheckExact(retval))) {
+            __Pyx_BEGIN_CRITICAL_SECTION2(o, o->agt_gen);
             o->agt_gen->ag_running_async = 0;
             o->agt_state = __PYX_AWAITABLE_STATE_CLOSED;
+            __Pyx_END_CRITICAL_SECTION2();
             Py_DECREF(retval);
             PyErr_SetString(PyExc_RuntimeError, __Pyx_ASYNC_GEN_IGNORED_EXIT_MSG);
             return NULL;
@@ -864,7 +956,9 @@ __Pyx_async_gen_athrow_close(PyObject *g, PyObject *args)
 {
     __pyx_PyAsyncGenAThrow *o = (__pyx_PyAsyncGenAThrow*) g;
     CYTHON_UNUSED_VAR(args);
+    __Pyx_BEGIN_CRITICAL_SECTION(o);
     o->agt_state = __PYX_AWAITABLE_STATE_CLOSED;
+    __Pyx_END_CRITICAL_SECTION();
     Py_RETURN_NONE;
 }
 
