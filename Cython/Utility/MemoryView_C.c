@@ -430,7 +430,8 @@ static int __Pyx_ValidateAndInit_memviewslice(
         if (unlikely(!__Pyx_BufFmt_CheckString(&ctx, buf->format))) goto fail;
     }
 
-    if (unlikely((unsigned) buf->itemsize != dtype->size)) {
+    // TODO - dtype->size is opaque. But this needs some extra validation somewhere
+    if (unlikely((unsigned) buf->itemsize != dtype->size && dtype->size != 0)) {
         PyErr_Format(PyExc_ValueError,
                      "Item size of buffer (%" CYTHON_FORMAT_SSIZE_T "u byte%s) "
                      "does not match size of '%s' (%" CYTHON_FORMAT_SSIZE_T "u byte%s)",
@@ -445,7 +446,7 @@ static int __Pyx_ValidateAndInit_memviewslice(
     /* Check axes */
     if (buf->len > 0) {
         // 0-sized arrays do not undergo these checks since their strides are
-        // irrelevant and they are always both C- and F-contiguous.
+        // irrelevant and they are alwadys both C- and F-contiguous.
         for (i = 0; i < ndim; i++) {
             spec = axes_specs[i];
             if (unlikely(!__pyx_check_strides(buf, i, ndim, spec)))
@@ -839,6 +840,15 @@ __pyx_memviewslice_is_contig(const {{memviewslice_name}} mvs, char order, int nd
     return 1;
 }
 
+/////////////// MemviewSliceFormat.proto //////////////
+
+static const char* __pyx_memviewslice_format(const {{memviewslice_name}} mvs); /* proto */
+
+/////////////// MemviewSliceFormat //////////////
+
+static const char* __pyx_memviewslice_format(const {{memviewslice_name}} mvs) {
+    return mvs.memview->view.format;
+}
 
 /////////////// MemviewSliceIndex ///////////////
 

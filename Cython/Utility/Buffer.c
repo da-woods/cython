@@ -55,6 +55,18 @@ struct __Pyx_StructField_;
 
 #define __PYX_BUF_FLAGS_PACKED_STRUCT (1 << 0)
 
+typedef enum {
+  __PYX_BUF_EXTENDED_VALIDATION_NAME = 1,
+  __PYX_BUF_EXTENDED_VALIDATION_STARTSWITH,
+  __PYX_BUF_EXTENDED_VALIDATION_REGEX
+} __Pyx_BufExtendedValidationType;
+
+typedef struct {
+  __Pyx_BufExtendedValidationType validation_type; /* 1 str-match, 2 startswidth, 3 re */
+  const char *prefix;
+  const char *validation_str;
+} __Pyx_BufExtendedValidation;
+
 typedef struct {
   const char* name; /* for error messages only */
   const struct __Pyx_StructField_* fields;
@@ -64,6 +76,7 @@ typedef struct {
   char typegroup; /* _R_eal, _C_omplex, Signed _I_nt, _U_nsigned int, _S_truct, _P_ointer, _O_bject, c_H_ar */
   char is_unsigned;
   int flags;
+  const __Pyx_BufExtendedValidation *extended_validation;
 } __Pyx_TypeInfo;
 
 typedef struct __Pyx_StructField_ {
@@ -145,7 +158,11 @@ static int __Pyx__GetBufferAndValidate(
     __Pyx_BufFmt_Init(&ctx, stack, dtype);
     if (!__Pyx_BufFmt_CheckString(&ctx, buf->format)) goto fail;
   }
-  if (unlikely((size_t)buf->itemsize != dtype->size)) {
+  if (dtype->size == 0) {
+    // Opaque.
+    // TODO - validate that this is the last one.
+  }
+  else if (unlikely((size_t)buf->itemsize != dtype->size)) {
     PyErr_Format(PyExc_ValueError,
       "Item size of buffer (%" CYTHON_FORMAT_SSIZE_T "d byte%s) does not match size of '%s' (%" CYTHON_FORMAT_SSIZE_T "d byte%s)",
       buf->itemsize, (buf->itemsize > 1) ? "s" : "",
@@ -203,7 +220,7 @@ static void __Pyx_BufFmt_Init(__Pyx_BufFmt_Context* ctx,
   ctx->is_complex = 0;
   ctx->is_valid_array = 0;
   ctx->struct_alignment = 0;
-  while (type->typegroup == 'S') {
+  while (type->typegroup == 'S' && type->fields[0].name) {
     ++ctx->head;
     ctx->head->field = type->fields;
     ctx->head->parent_offset = 0;
@@ -611,6 +628,153 @@ __pyx_buffmt_parse_array(__Pyx_BufFmt_Context* ctx, const char** tsp)
     return 0;
 }
 
+static int __Pyx_BufFmt_AddOpaqueType(__Pyx_BufFmt_Context* ctx, const char *prefix, const char *postfix) {
+
+  __Pyx_BufFmt_StackElem *head = ctx->head;
+  while (1) {
+    const __Pyx_BufExtendedValidation* ev = head->field->type->extended_validation;
+    if (ev) {
+      while (ev->validation_type) {
+        if (strcmp(ev->prefix, prefix) != 0) continue;
+        int match = 0;
+        switch (ev->validation_type) {
+          case __PYX_BUF_EXTENDED_VALIDATION_NAME:
+            match = strcmp(ev->validation_str, postfix) == 0;
+            break;
+          case __PYX_BUF_EXTENDED_VALIDATION_STARTSWITH:
+            match = strncmp(ev->validation_str, postfix, strlen(ev->validation_str)) == 0;
+            break;
+          case __PYX_BUF_EXTENDED_VALIDATION_REGEX: {
+            PyObject *re = PyImport_ImportModule("re");
+            if (unlikely(!re)) return -1;
+            PyObject *py_result = PyObject_CallMethod(
+              re,
+              "match",
+              "ss",
+              ev->validation_str,
+              postfix
+            );
+            Py_DECREF(re);
+            if (unlikely(!py_result)) return -1;
+            match = PyObject_IsTrue(py_result);
+            Py_DECREF(py_result);
+            if (unlikely(match == -1)) return -1;
+            break;
+          }
+        }
+
+        if (match) {
+          ctx->head = head;
+          goto success_;
+        }
+        ++ev;
+      }
+    }
+    if (head->field != &ctx->root) {
+      // Go up and try again
+      --head;
+      if (ctx->fmt_offset != head->parent_offset) {
+        PyErr_SetString(PyExc_ValueError, "Failed - not at start");
+        return -1;
+      }
+    } else {
+      PyErr_SetString(PyExc_ValueError, "Gone off top of stack");
+      return -1;
+    }
+  }
+
+  success_:;
+  /* Done checking, move to next field, pushing or popping struct stack if needed */
+  const __Pyx_StructField* field = ctx->head->field;
+  while (1) {
+    if (field == &ctx->root) {
+      ctx->head = NULL;
+      if (ctx->enc_count != 0) {
+        __Pyx_BufFmt_RaiseExpected(ctx);
+        return -1;
+      }
+      break; /* breaks both loops as ctx->enc_count == 0 */
+    }
+    ctx->head->field = ++field;
+    if (field->type == NULL) {
+      --ctx->head;
+      field = ctx->head->field;
+      continue;
+    } else if (field->type->typegroup == 'S') {
+      size_t parent_offset = ctx->head->parent_offset + field->offset;
+      if (field->type->fields->type == NULL) continue; /* empty struct */
+      field = field->type->fields;
+      ++ctx->head;
+      ctx->head->field = field;
+      ctx->head->parent_offset = parent_offset;
+      break;
+    } else {
+      break;
+    }
+  }
+
+  ctx->enc_type = 0;
+  ctx->is_complex = 0;
+  return 0;
+}
+
+static int __pyx_buffmt_parse_opaque_type(__Pyx_BufFmt_Context* ctx, const char** tsp) {
+  const char* ts = *tsp;
+  const char* prefix_end = NULL;
+  const char* opaque_type_end = NULL;
+  int result = 0;
+  while (1) {
+    ++ts;
+    switch (*ts) {
+      case '\0':
+        goto break_while;
+      case '$':
+        if (!prefix_end) {
+          prefix_end = ts;
+        }
+        // As far as I can tell, multiple '$' are allowed, but only the first has special meaning
+        break;
+      case ']':
+        opaque_type_end = ts;
+        ++ts;
+        goto break_while;
+    }
+  }
+  break_while:
+  if (!opaque_type_end) {
+    PyErr_SetString(PyExc_ValueError, "Opaque type in buffer format had no closing ']");
+    result = -1;
+    goto done;
+  }
+  if (!prefix_end) {
+    PyErr_SetString(PyExc_ValueError, "Opaque type had no '$' delimited prefix");
+    result = -1;
+    goto done;
+  }
+
+  char* prefix = calloc(1, 1 + prefix_end - (*tsp+1));
+  Py_ssize_t i = 0;
+  for (const char* pr=(*tsp+1); pr < prefix_end; ++pr) {
+    prefix[i] = *pr;
+    ++i;
+  }
+  char* rest = calloc(1, ts - prefix_end-1);
+  i = 0;
+  for (const char* r = prefix_end+1; r < (ts-1); ++r) {
+    rest[i] = *r;
+    ++i;
+  }
+
+  result = __Pyx_BufFmt_AddOpaqueType(ctx, prefix, rest);
+
+  free(prefix);
+  free(rest);
+
+  done:
+  *tsp = ts;
+  return result;
+}
+
 static const char* __Pyx_BufFmt_CheckString(__Pyx_BufFmt_Context* ctx, const char* ts) {
   int got_Z = 0;
 
@@ -741,6 +905,9 @@ static const char* __Pyx_BufFmt_CheckString(__Pyx_BufFmt_Context* ctx, const cha
         break;
       case '(':
         if (__pyx_buffmt_parse_array(ctx, &ts) < 0) return NULL;
+        break;
+      case '[':
+        if (__pyx_buffmt_parse_opaque_type(ctx, &ts) < 0) return NULL;
         break;
       default:
         {
