@@ -1178,6 +1178,10 @@ static PyObject *__Pyx_Generator_Next(PyObject *self) {
     }
     __Pyx_Coroutine_unset_is_running(gen);
 
+    if (result == PYGEN_RETURN && (retval == NULL || retval == Py_None)) {
+        Py_XDECREF(retval);
+        return NULL;
+    }
     return __Pyx_Coroutine_MethodReturnFromResult(self, result, retval);
 }
 
