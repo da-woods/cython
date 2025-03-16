@@ -597,6 +597,7 @@ def get_type_information_cname(code, dtype, maxdepth=None):
         complex_possible = dtype.is_struct_or_union and dtype.can_be_complex()
 
         declcode = dtype.empty_declaration_code()
+        sizeof = f"sizeof({declcode})"
         if dtype.is_simple_buffer_dtype():
             structinfo_name = "NULL"
         elif dtype.is_struct:
@@ -605,7 +606,8 @@ def get_type_information_cname(code, dtype, maxdepth=None):
                 struct_scope = struct_scope.base_type_scope
             # Must pre-call all used types in order not to recurse during utility code writing.
             fields = struct_scope.var_entries
-            assert len(fields) > 0
+            if not fields:
+                sizeof = "0"
             types = [get_type_information_cname(code, f.type, maxdepth - 1)
                      for f in fields]
             typecode.putln("static const __Pyx_StructField %s[] = {" % structinfo_name, safe=True)
@@ -663,8 +665,8 @@ def get_type_information_cname(code, dtype, maxdepth=None):
             typecode.putln("{0, 0, 0}};")
 
         typeinfo = ('static const __Pyx_TypeInfo %s = '
-                        '{ "%s", %s, sizeof(%s), { %s }, %s, %s, %s, %s, %s };')
-        tup = (name, rep, structinfo_name, declcode,
+                        '{ "%s", %s, %s, { %s }, %s, %s, %s, %s, %s };')
+        tup = (name, rep, structinfo_name, sizeof,
                ', '.join([str(x) for x in arraysizes]) or '0', len(arraysizes),
                typegroup, is_unsigned, flags,
                f"{name}_ext" if uses_extended_validation else '0')

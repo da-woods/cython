@@ -3943,6 +3943,8 @@ class CStructOrUnionType(CType):
     def struct_nesting_depth(self):
         child_depths = [x.type.struct_nesting_depth()
                         for x in self.scope.var_entries]
+        if not child_depths:
+            return 1
         return max(child_depths) + 1
 
     def cast_code(self, expr_code):

@@ -158,7 +158,11 @@ static int __Pyx__GetBufferAndValidate(
     __Pyx_BufFmt_Init(&ctx, stack, dtype);
     if (!__Pyx_BufFmt_CheckString(&ctx, buf->format)) goto fail;
   }
-  if (unlikely((size_t)buf->itemsize != dtype->size)) {
+  if (dtype->size == 0) {
+    // Opaque.
+    // TODO - validate that this is the last one.
+  }
+  else if (unlikely((size_t)buf->itemsize != dtype->size)) {
     PyErr_Format(PyExc_ValueError,
       "Item size of buffer (%" CYTHON_FORMAT_SSIZE_T "d byte%s) does not match size of '%s' (%" CYTHON_FORMAT_SSIZE_T "d byte%s)",
       buf->itemsize, (buf->itemsize > 1) ? "s" : "",
@@ -216,7 +220,7 @@ static void __Pyx_BufFmt_Init(__Pyx_BufFmt_Context* ctx,
   ctx->is_complex = 0;
   ctx->is_valid_array = 0;
   ctx->struct_alignment = 0;
-  while (type->typegroup == 'S') {
+  while (type->typegroup == 'S' && type->fields[0].name) {
     ++ctx->head;
     ctx->head->field = type->fields;
     ctx->head->parent_offset = 0;
