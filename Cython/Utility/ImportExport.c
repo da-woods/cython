@@ -173,7 +173,7 @@ static PyObject *__Pyx_Import(__PYX_CONTEXT_FIRST_ARG_DEF PyObject *name, PyObje
     PyObject *module = 0;
     PyObject *empty_dict = 0;
     PyObject *empty_list = 0;
-    empty_dict = PyDict_New();
+    empty_dict = __PYX_H0(PyDict_New);
     if (unlikely(!empty_dict))
         goto bad;
     if (level == -1) {

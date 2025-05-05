@@ -882,14 +882,14 @@ static CYTHON_INLINE double __Pyx_PyUnicode_AsDouble(PyObject *obj) {
 /////////////// pybytes_as_double.proto ///////////////
 
 static double __Pyx_SlowPyString_AsDouble(PyObject *obj);/*proto*/
-static double __Pyx__PyBytes_AsDouble(PyObject *obj, const char* start, Py_ssize_t length);/*proto*/
+static double __Pyx__PyBytes_AsDouble(__PYX_CONTEXT_FIRST_ARG_DEF PyObject *obj, const char* start, Py_ssize_t length);/*proto*/
 
-static CYTHON_INLINE double __Pyx_PyBytes_AsDouble(PyObject *obj) {
+static CYTHON_INLINE double __Pyx_PyBytes_AsDouble(__PYX_CONTEXT_FIRST_ARG_DEF PyObject *obj) {
     char* as_c_string;
     Py_ssize_t size;
 #if CYTHON_ASSUME_SAFE_MACROS && CYTHON_ASSUME_SAFE_SIZE
-    as_c_string = PyBytes_AS_STRING(obj);
-    size = PyBytes_GET_SIZE(obj);
+    as_c_string = __PYX_H(PyBytes_AS_STRING, obj);
+    size = __PYX_H(PyBytes_GET_SIZE, obj);
 #else
     if (PyBytes_AsStringAndSize(obj, &as_c_string, &size) < 0) {
         return (double)-1;

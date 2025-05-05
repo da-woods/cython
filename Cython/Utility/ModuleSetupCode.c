@@ -979,7 +979,7 @@ static CYTHON_INLINE void *__Pyx__PyModule_GetState(PyObject *op)
 #if CYTHON_COMPILING_IN_CPYTHON || defined(_PyDict_NewPresized)
 #define __Pyx_PyDict_NewPresized(n)  ((n <= 8) ? PyDict_New() : _PyDict_NewPresized(n))
 #else
-#define __Pyx_PyDict_NewPresized(n)  PyDict_New()
+#define __Pyx_PyDict_NewPresized(n)  __PYX_H0(PyDict_New)
 #endif
 
 #define __Pyx_PyNumber_Divide(x,y)         PyNumber_TrueDivide(x,y)

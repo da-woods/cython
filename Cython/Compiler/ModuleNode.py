@@ -1659,7 +1659,7 @@ class ModuleNode(Nodes.Node, Nodes.BlockNode):
         for entry in py_attrs:
             if entry.name == "__dict__":
                 needs_error_cleanup = True
-                code.put("p->%s = PyDict_New(); if (unlikely(!p->%s)) goto bad;" % (
+                code.put("p->%s = __PYX_H0(PyDict_New); if (unlikely(!p->%s)) goto bad;" % (
                     entry.cname, entry.cname))
             else:
                 code.put_init_var_to_py_none(entry, "p->%s", nanny=False)
@@ -2732,7 +2732,7 @@ class ModuleNode(Nodes.Node, Nodes.BlockNode):
         code.putln("static PyObject *%s(PyObject *o, CYTHON_UNUSED void *x) {" % func_name)
         self.generate_self_cast(scope, code)
         code.putln("if (unlikely(!p->%s)){" % dict_name)
-        code.putln("p->%s = PyDict_New();" % dict_name)
+        code.putln("p->%s = __PYX_H0(PyDict_New);" % dict_name)
         code.putln("}")
         code.putln("Py_XINCREF(p->%s);" % dict_name)
         code.putln("return p->%s;" % dict_name)

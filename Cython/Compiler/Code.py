@@ -2025,7 +2025,7 @@ class GlobalState:
 
         w.start_initcfunc(init_function)
 
-        w.putln("PyObject* tuple_dedup_map = PyDict_New();")
+        w.putln("PyObject* tuple_dedup_map = __PYX_H0(PyDict_New);")
         w.putln("if (unlikely(!tuple_dedup_map)) return -1;")
 
         for node in self.codeobject_constants:

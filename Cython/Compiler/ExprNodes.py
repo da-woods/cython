@@ -9166,11 +9166,11 @@ class ComprehensionNode(ScopedExprNode):
 
     def generate_operation_code(self, code):
         if self.type is Builtin.list_type:
-            create_code = 'PyList_New(0)'
+            create_code = '__PYX_H(PyList_New, 0)'
         elif self.type is Builtin.set_type:
             create_code = 'PySet_New(NULL)'
         elif self.type is Builtin.dict_type:
-            create_code = 'PyDict_New()'
+            create_code = '__PYX_H0(PyDict_New)'
         else:
             raise InternalError("illegal type for comprehension: %s" % self.type)
         code.putln('%s = %s; %s' % (
@@ -11763,7 +11763,7 @@ class CythonArrayNode(ExprNode):
             code.error_goto_if_null(format_ptr_temp, self.pos),
         ))
         code.putln("#else")
-        code.putln('%s = PyBytes_AS_STRING(%s);' % (
+        code.putln('%s = __PYX_H(PyBytes_AS_STRING, %s);' % (
             format_ptr_temp, format_temp,
         ))
         code.putln("#endif")

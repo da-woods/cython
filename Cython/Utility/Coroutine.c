@@ -1520,7 +1520,7 @@ __Pyx_Coroutine_set_qualname(__pyx_CoroutineObject *self, PyObject *value, void 
 }
 
 static PyObject *
-__Pyx__Coroutine_get_frame(__pyx_CoroutineObject *self)
+__Pyx__Coroutine_get_frame(__PYX_CONTEXT_FIRST_ARG_DEF __pyx_CoroutineObject *self)
 {
 #if !CYTHON_COMPILING_IN_LIMITED_API
     PyObject *frame;
@@ -1537,7 +1537,7 @@ __Pyx__Coroutine_get_frame(__pyx_CoroutineObject *self)
         // In principle this could be solved by storing a reference to the module in the coroutine,
         // but in practice it probably isn't worth the extra memory.
         // Therefore, just supply a blank dict.
-        PyObject *globals = PyDict_New();
+        PyObject *globals = __PYX_H0(PyDict_New);
         if (unlikely(!globals)) return NULL;
         frame = (PyObject *) PyFrame_New(
             PyThreadState_Get(),            /*PyThreadState *tstate,*/

@@ -4105,7 +4105,7 @@ class DefNodeWrapper(FuncDefNode):
                 code.put_var_gotref(self.starstar_arg.entry)
 
                 code.putln("} else {")
-                code.putln(f"{starstar_arg_cname} = PyDict_New();")
+                code.putln(f"{starstar_arg_cname} = __PYX_H0(PyDict_New);")
                 code.putln(f"if (unlikely(!{starstar_arg_cname})) {goto_error}")
                 code.put_var_gotref(self.starstar_arg.entry)
 
@@ -4424,7 +4424,7 @@ class DefNodeWrapper(FuncDefNode):
         # If the "**kwargs" parameter is unused, we keep it as NULL to avoid useless overhead.
         if self.starstar_arg and self.starstar_arg.entry.cf_used:
             self.starstar_arg.entry.xdecref_cleanup = 0
-            code.putln('%s = PyDict_New(); if (unlikely(!%s)) return %s;' % (
+            code.putln('%s = __PYX_H0(PyDict_New); if (unlikely(!%s)) return %s;' % (
                 self.starstar_arg.entry.cname,
                 self.starstar_arg.entry.cname,
                 self.error_value()))
@@ -4867,11 +4867,11 @@ class GeneratorBodyDefNode(DefNode):
         if self.is_inlined and self.inlined_comprehension_type is not None:
             target_type = self.inlined_comprehension_type
             if target_type is Builtin.list_type:
-                comp_init = 'PyList_New(0)'
+                comp_init = '__PYX_H(PyList_New, 0)'
             elif target_type is Builtin.set_type:
                 comp_init = 'PySet_New(NULL)'
             elif target_type is Builtin.dict_type:
-                comp_init = 'PyDict_New()'
+                comp_init = '__PYX_H0(PyDict_New)'
             else:
                 raise InternalError(
                     "invalid type of inlined comprehension: %s" % target_type)

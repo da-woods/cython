@@ -98,7 +98,7 @@ static PyObject* __Pyx_PyExec3(PyObject* o, PyObject* globals, PyObject* locals)
             s = PyUnicode_AsUTF8String(o);
             if (unlikely(!s)) goto bad;
             o = s;
-        } else if (unlikely(!PyBytes_Check(o))) {
+        } else if (unlikely(!__PYX_H(PyBytes_Check, o))) {
             __Pyx_TypeName o_type_name = __Pyx_PyType_GetFullyQualifiedName(Py_TYPE(o));
             PyErr_Format(PyExc_TypeError,
                 "exec: arg 1 must be string, bytes or code object, got " __Pyx_FMT_TYPENAME,
@@ -106,7 +106,7 @@ static PyObject* __Pyx_PyExec3(PyObject* o, PyObject* globals, PyObject* locals)
             __Pyx_DECREF_TypeName(o_type_name);
             goto bad;
         }
-        code = PyBytes_AS_STRING(o);
+        code = __PYX_H(PyBytes_AS_STRING, o);
         if (PyEval_MergeCompilerFlags(&cf)) {
             result = PyRun_StringFlags(code, Py_file_input, globals, locals, &cf);
         } else {
@@ -485,19 +485,19 @@ static double __Pyx_double_from_UCS4(Py_UCS4 uchar) {
 
 #define __Pyx_PyObject_Ord(c) \
     (likely(PyUnicode_Check(c)) ? (long)__Pyx_PyUnicode_AsPy_UCS4(c) : __Pyx__PyObject_Ord(c))
-static long __Pyx__PyObject_Ord(PyObject* c); /*proto*/
+static long __Pyx__PyObject_Ord(__PYX_CONTEXT_FIRST_ARG_DEF PyObject* c); /*proto*/
 
 //////////////////// object_ord ////////////////////
 
-static long __Pyx__PyObject_Ord(PyObject* c) {
+static long __Pyx__PyObject_Ord(__PYX_CONTEXT_FIRST_ARG_DEF PyObject* c) {
     Py_ssize_t size;
-    if (PyBytes_Check(c)) {
+    if (__PYX_H(PyBytes_Check, c)) {
         size = __Pyx_PyBytes_GET_SIZE(c);
         if (likely(size == 1)) {
 #if CYTHON_ASSUME_SAFE_MACROS
-            return (unsigned char) PyBytes_AS_STRING(c)[0];
+            return (unsigned char) __PYX_H(PyBytes_AS_STRING, c)[0];
 #else
-            char *data = PyBytes_AsString(c);
+            char *data = __PYX_H(PyBytes_AsString, c);
             if (unlikely(!data)) return -1;
             return (unsigned char) data[0];
 #endif

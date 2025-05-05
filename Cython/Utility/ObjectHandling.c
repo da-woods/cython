@@ -1226,10 +1226,10 @@ static PyObject *__Pyx_Py3MetaclassPrepare(__PYX_CONTEXT_FIRST_ARG_DEF
         } else {
             if (unlikely(PyErr_Occurred()))
                 return NULL;
-            ns = PyDict_New();
+            ns = __PYX_H0(PyDict_New);
         }
     } else {
-        ns = PyDict_New();
+        ns = __PYX_H0(PyDict_New);
     }
 
     if (unlikely(!ns))

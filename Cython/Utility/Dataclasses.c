@@ -151,7 +151,7 @@ static int __Pyx_DataclassesCallHelper_FilterToDict(PyObject *callable, PyObject
     return 0;
 }
 
-static PyObject* __Pyx_DataclassesCallHelper(PyObject *callable, PyObject *kwds) {
+static PyObject* __Pyx_DataclassesCallHelper(__PYX_CONTEXT_FIRST_ARG_DEF PyObject *callable, PyObject *kwds) {
     PyObject *new_kwds=NULL, *result=NULL;
     PyObject *inspect;
     PyObject *args_list=NULL, *kwonly_args_list=NULL, *getfullargspec_result=NULL;
@@ -169,7 +169,7 @@ static PyObject* __Pyx_DataclassesCallHelper(PyObject *callable, PyObject *kwds)
     kwonly_args_list = PyObject_GetAttrString(getfullargspec_result, "kwonlyargs");
     if (!kwonly_args_list) goto bad;
 
-    new_kwds = PyDict_New();
+    new_kwds = __PYX_H0(PyDict_New);
     if (!new_kwds) goto bad;
 
     // copy over only those arguments that are in the specification

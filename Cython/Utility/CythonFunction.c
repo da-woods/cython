@@ -288,10 +288,10 @@ __Pyx_CyFunction_set_qualname(__PYX_CONTEXT_FIRST_ARG_DEF __pyx_CyFunctionObject
 }
 
 static PyObject *
-__Pyx_CyFunction_get_dict_locked(__pyx_CyFunctionObject *op)
+__Pyx_CyFunction_get_dict_locked( __PYX_CONTEXT_FIRST_ARG_DEF__pyx_CyFunctionObject *op)
 {
     if (unlikely(op->func_dict == NULL)) {
-        op->func_dict = PyDict_New();
+        op->func_dict = __PYX_H0(PyDict_New);
         if (unlikely(op->func_dict == NULL))
             return NULL;
     }
@@ -305,7 +305,7 @@ __Pyx_CyFunction_get_dict(__PYX_CONTEXT_FIRST_ARG_DEF __pyx_CyFunctionObject *op
     CYTHON_UNUSED_VAR(context);
     PyObject *result;
     __Pyx_BEGIN_CRITICAL_SECTION(op);
-    result = __Pyx_CyFunction_get_dict_locked(op);
+    result = __Pyx_CyFunction_get_dict_locked(__PYX_CONTEXT_CALL(,) op);
     __Pyx_END_CRITICAL_SECTION();
     return result;
 }
@@ -492,10 +492,10 @@ __Pyx_CyFunction_set_annotations(__PYX_CONTEXT_FIRST_ARG_DEF __pyx_CyFunctionObj
 }
 
 static PyObject *
-__Pyx_CyFunction_get_annotations_locked(__pyx_CyFunctionObject *op) {
+__Pyx_CyFunction_get_annotations_locked(__PYX_CONTEXT_FIRST_ARG_DEF __pyx_CyFunctionObject *op) {
     PyObject* result = op->func_annotations;
     if (unlikely(!result)) {
-        result = PyDict_New();
+        result = __PYX_H0(PyDict_New);
         if (unlikely(!result)) return NULL;
         op->func_annotations = result;
     }
@@ -508,7 +508,7 @@ __Pyx_CyFunction_get_annotations(__PYX_CONTEXT_FIRST_ARG_DEF __pyx_CyFunctionObj
     PyObject *result;
     CYTHON_UNUSED_VAR(context);
     __Pyx_BEGIN_CRITICAL_SECTION(op);
-    result = __Pyx_CyFunction_get_annotations_locked(op);
+    result = __Pyx_CyFunction_get_annotations_locked(__PYX_CONTEXT_CALL(,) op);
     __Pyx_END_CRITICAL_SECTION();
     return result;
 }

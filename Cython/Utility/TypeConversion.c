@@ -57,20 +57,20 @@ static CYTHON_INLINE PyObject* __Pyx_PyByteArray_FromString(const char*);
 static CYTHON_INLINE PyObject* __Pyx_PyUnicode_FromString(const char*);
 
 #if CYTHON_ASSUME_SAFE_MACROS
-    #define __Pyx_PyBytes_AsWritableString(s)     ((char*) PyBytes_AS_STRING(s))
-    #define __Pyx_PyBytes_AsWritableSString(s)    ((signed char*) PyBytes_AS_STRING(s))
-    #define __Pyx_PyBytes_AsWritableUString(s)    ((unsigned char*) PyBytes_AS_STRING(s))
-    #define __Pyx_PyBytes_AsString(s)     ((const char*) PyBytes_AS_STRING(s))
-    #define __Pyx_PyBytes_AsSString(s)    ((const signed char*) PyBytes_AS_STRING(s))
-    #define __Pyx_PyBytes_AsUString(s)    ((const unsigned char*) PyBytes_AS_STRING(s))
+    #define __Pyx_PyBytes_AsWritableString(s)     ((char*) __PYX_H(PyBytes_AS_STRING, s))
+    #define __Pyx_PyBytes_AsWritableSString(s)    ((signed char*) __PYX_H(PyBytes_AS_STRING, s))
+    #define __Pyx_PyBytes_AsWritableUString(s)    ((unsigned char*) __PYX_H(PyBytes_AS_STRING, s))
+    #define __Pyx_PyBytes_AsString(s)     ((const char*) __PYX_H(PyBytes_AS_STRING, s))
+    #define __Pyx_PyBytes_AsSString(s)    ((const signed char*) __PYX_H(PyBytes_AS_STRING, s))
+    #define __Pyx_PyBytes_AsUString(s)    ((const unsigned char*) __PYX_H(PyBytes_AS_STRING, s))
     #define __Pyx_PyByteArray_AsString(s) PyByteArray_AS_STRING(s)
 #else
-    #define __Pyx_PyBytes_AsWritableString(s)     ((char*) PyBytes_AsString(s))
-    #define __Pyx_PyBytes_AsWritableSString(s)    ((signed char*) PyBytes_AsString(s))
-    #define __Pyx_PyBytes_AsWritableUString(s)    ((unsigned char*) PyBytes_AsString(s))
-    #define __Pyx_PyBytes_AsString(s)     ((const char*) PyBytes_AsString(s))
-    #define __Pyx_PyBytes_AsSString(s)    ((const signed char*) PyBytes_AsString(s))
-    #define __Pyx_PyBytes_AsUString(s)    ((const unsigned char*) PyBytes_AsString(s))
+    #define __Pyx_PyBytes_AsWritableString(s)     ((char*) __PYX_H(PyBytes_AsString, s))
+    #define __Pyx_PyBytes_AsWritableSString(s)    ((signed char*) __PYX_H(PyBytes_AsString, s))
+    #define __Pyx_PyBytes_AsWritableUString(s)    ((unsigned char*) __PYX_H(PyBytes_AsString, s))
+    #define __Pyx_PyBytes_AsString(s)     ((const char*) __PYX_H(PyBytes_AsString, s))
+    #define __Pyx_PyBytes_AsSString(s)    ((const signed char*) __PYX_H(PyBytes_AsString, s))
+    #define __Pyx_PyBytes_AsUString(s)    ((const unsigned char*) __PYX_H(PyBytes_AsString, s))
     #define __Pyx_PyByteArray_AsString(s) PyByteArray_AsString(s)
 #endif
 #define __Pyx_PyObject_AsWritableString(s)    ((char*)(__pyx_uintptr_t) __Pyx_PyObject_AsString(s))
