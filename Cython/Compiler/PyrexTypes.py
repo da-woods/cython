@@ -354,7 +354,7 @@ class PyrexType(BaseType):
                              from_py_function=None, error_condition=None, extra_args=None,
                              special_none_cvalue=None):
         args = ', ' + ', '.join('%s' % arg for arg in extra_args) if extra_args else ''
-        convert_call = "%s(%s%s)" % (
+        convert_call = "%s(__PYX_CONTEXT_CALL(,) %s%s)" % (
             from_py_function or self.from_py_function,
             source_code,
             args,
@@ -1534,7 +1534,7 @@ class BuiltinObjectType(PyObjectType):
                     "RaiseUnexpectedTypeError", "ObjectHandling.c"))
         if allow_none:
             check += f'||(({arg}) == Py_None)'
-        return check + f' || __Pyx_RaiseUnexpectedTypeError("{self.name}", {arg})'
+        return check + f' || __Pyx_RaiseUnexpectedTypeError(__PYX_CONTEXT_CALL(,) "{self.name}", {arg})'
 
     def declaration_code(self, entity_code,
             for_display = 0, dll_linkage = None, pyrex = 0):

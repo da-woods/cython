@@ -105,8 +105,8 @@ static CYTHON_INLINE PyObject *__Pyx_XNewRef(PyObject *obj) {
 
 static CYTHON_INLINE PyObject *__Pyx_Owned_Py_None(int b);
 static CYTHON_INLINE PyObject * __Pyx_PyBool_FromLong(long b);
-static CYTHON_INLINE int __Pyx_PyObject_IsTrue(PyObject*);
-static CYTHON_INLINE int __Pyx_PyObject_IsTrueAndDecref(PyObject*);
+static CYTHON_INLINE int __Pyx_PyObject_IsTrue(__PYX_CONTEXT_FIRST_ARG_DEF PyObject*);
+static CYTHON_INLINE int __Pyx_PyObject_IsTrueAndDecref(__PYX_CONTEXT_FIRST_ARG_DEF PyObject*);
 static CYTHON_INLINE PyObject* __Pyx_PyNumber_Long(PyObject* x);
 
 #define __Pyx_PySequence_Tuple(obj) \
@@ -303,16 +303,16 @@ static CYTHON_INLINE const char* __Pyx_PyObject_AsStringAndSize(PyObject* o, Py_
 }
 
 /* Note: __Pyx_PyObject_IsTrue is written to minimize branching. */
-static CYTHON_INLINE int __Pyx_PyObject_IsTrue(PyObject* x) {
+static CYTHON_INLINE int __Pyx_PyObject_IsTrue(__PYX_CONTEXT_FIRST_ARG_DEF PyObject* x) {
    int is_true = x == Py_True;
    if (is_true | (x == Py_False) | (x == Py_None)) return is_true;
    else return PyObject_IsTrue(x);
 }
 
-static CYTHON_INLINE int __Pyx_PyObject_IsTrueAndDecref(PyObject* x) {
+static CYTHON_INLINE int __Pyx_PyObject_IsTrueAndDecref(__PYX_CONTEXT_FIRST_ARG_DEF PyObject* x) {
     int retval;
     if (unlikely(!x)) return -1;
-    retval = __Pyx_PyObject_IsTrue(x);
+    retval = __Pyx_PyObject_IsTrue(__PYX_CONTEXT_CALL(,) x);
     Py_DECREF(x);
     return retval;
 }

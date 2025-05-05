@@ -3645,10 +3645,10 @@ class DefNode(FuncDefNode):
         if preprocessor_guard:
             decls_code.putln(preprocessor_guard)
         decls_code.putln(
-            "static %s(%s); /* proto */" % (dc, arg_code))
+            "static %s(__PYX_CONTEXT_FIRST_ARG_DEF %s); /* proto */" % (dc, arg_code))
         if preprocessor_guard:
             decls_code.putln("#endif")
-        code.putln("static %s(%s) {" % (dc, arg_code))
+        code.putln("static %s(__PYX_CONTEXT_FIRST_ARG_DEF %s) {" % (dc, arg_code))
 
     def generate_argument_declarations(self, env, code):
         pass
@@ -3775,7 +3775,7 @@ class DefNodeWrapper(FuncDefNode):
         args = ', '.join(args)
         if not self.return_type.is_void:
             code.put('%s = ' % Naming.retval_cname)
-        code.putln('%s(%s);' % (
+        code.putln('%s(__PYX_CONTEXT_FIRST_ARG_DEF %s);' % (
             self.target.entry.pyfunc_cname, args))
 
     def generate_function_definitions(self, env, code):
@@ -3909,7 +3909,7 @@ class DefNodeWrapper(FuncDefNode):
             with_pymethdef = False
 
         dc = self.return_type.declaration_code(entry.func_cname)
-        header = "%sstatic %s(%s)" % (mf, dc, arg_code)
+        header = "%sstatic %s(__PYX_CONTEXT_FIRST_ARG_DEF %s)" % (mf, dc, arg_code)
         code.putln("%s; /*proto*/" % header)
 
         if proto_only:
@@ -4629,7 +4629,7 @@ class DefNodeWrapper(FuncDefNode):
         old_type = arg.hdr_type
         func = old_type.to_py_function
         if func:
-            code.putln("%s = %s(%s); %s" % (
+            code.putln("%s = %s(__PYX_CONTEXT_CALL(,) %s); %s" % (
                 arg.entry.cname,
                 func,
                 arg.hdr_cname,
@@ -9448,7 +9448,7 @@ class FromImportStatNode(StatNode):
                 UtilityCode.load_cached("ImportFrom", "ImportExport.c"))
         for name, target, coerced_item in self.interned_items:
             code.putln(
-                '%s = __Pyx_ImportFrom(%s, %s); %s' % (
+                '%s = __Pyx_ImportFrom(__PYX_CONTEXT_CALL(,) %s, %s); %s' % (
                     item_temp,
                     self.module.py_result(),
                     code.intern_identifier(name),

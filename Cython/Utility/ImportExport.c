@@ -1,13 +1,13 @@
 /////////////// ImportDottedModule.proto ///////////////
 
-static PyObject *__Pyx_ImportDottedModule(PyObject *name, PyObject *parts_tuple); /*proto*/
-static PyObject *__Pyx_ImportDottedModule_WalkParts(PyObject *module, PyObject *name, PyObject *parts_tuple); /*proto*/
+static PyObject *__Pyx_ImportDottedModule(__PYX_CONTEXT_FIRST_ARG_DEF PyObject *name, PyObject *parts_tuple); /*proto*/
+static PyObject *__Pyx_ImportDottedModule_WalkParts(__PYX_CONTEXT_FIRST_ARG_DEF PyObject *module, PyObject *name, PyObject *parts_tuple); /*proto*/
 
 
 /////////////// ImportDottedModule ///////////////
 //@requires: Import
 
-static PyObject *__Pyx__ImportDottedModule_Error(PyObject *name, PyObject *parts_tuple, Py_ssize_t count) {
+static PyObject *__Pyx__ImportDottedModule_Error(__PYX_CONTEXT_FIRST_ARG_DEF PyObject *name, PyObject *parts_tuple, Py_ssize_t count) {
     PyObject *partial_name = NULL, *slice = NULL, *sep = NULL;
     Py_ssize_t size;
     if (unlikely(PyErr_Occurred())) {
@@ -42,7 +42,7 @@ bad:
     return NULL;
 }
 
-static PyObject *__Pyx__ImportDottedModule_Lookup(PyObject *name) {
+static PyObject *__Pyx__ImportDottedModule_Lookup(__PYX_CONTEXT_FIRST_ARG_DEF PyObject *name) {
     PyObject *imported_module;
 #if (CYTHON_COMPILING_IN_PYPY && PYPY_VERSION_NUM  < 0x07030400) || \
         CYTHON_COMPILING_IN_GRAAL
@@ -57,7 +57,7 @@ static PyObject *__Pyx__ImportDottedModule_Lookup(PyObject *name) {
     return imported_module;
 }
 
-static PyObject *__Pyx_ImportDottedModule_WalkParts(PyObject *module, PyObject *name, PyObject *parts_tuple) {
+static PyObject *__Pyx_ImportDottedModule_WalkParts(__PYX_CONTEXT_FIRST_ARG_DEF PyObject *module, PyObject *name, PyObject *parts_tuple) {
     Py_ssize_t i, nparts;
 #if CYTHON_ASSUME_SAFE_SIZE
     nparts = PyTuple_GET_SIZE(parts_tuple);
@@ -82,30 +82,30 @@ static PyObject *__Pyx_ImportDottedModule_WalkParts(PyObject *module, PyObject *
         module = submodule;
     }
     if (unlikely(!module)) {
-        return __Pyx__ImportDottedModule_Error(name, parts_tuple, i);
+        return __Pyx__ImportDottedModule_Error(__PYX_CONTEXT_CALL(,) name, parts_tuple, i);
     }
     return module;
 }
 
-static PyObject *__Pyx__ImportDottedModule(PyObject *name, PyObject *parts_tuple) {
+static PyObject *__Pyx__ImportDottedModule(__PYX_CONTEXT_FIRST_ARG_DEF PyObject *name, PyObject *parts_tuple) {
     PyObject *imported_module;
-    PyObject *module = __Pyx_Import(name, NULL, 0);
+    PyObject *module = __Pyx_Import(__PYX_CONTEXT_CALL(,) name, NULL, 0);
     if (!parts_tuple || unlikely(!module))
         return module;
 
     // Look up module in sys.modules, which is safer than the attribute lookups below.
-    imported_module = __Pyx__ImportDottedModule_Lookup(name);
+    imported_module = __Pyx__ImportDottedModule_Lookup(__PYX_CONTEXT_CALL(,) name);
     if (likely(imported_module)) {
         Py_DECREF(module);
         return imported_module;
     }
     PyErr_Clear();
-    return __Pyx_ImportDottedModule_WalkParts(module, name, parts_tuple);
+    return __Pyx_ImportDottedModule_WalkParts(__PYX_CONTEXT_CALL(,) module, name, parts_tuple);
 }
 
-static PyObject *__Pyx_ImportDottedModule(PyObject *name, PyObject *parts_tuple) {
+static PyObject *__Pyx_ImportDottedModule(__PYX_CONTEXT_FIRST_ARG_DEF PyObject *name, PyObject *parts_tuple) {
 #if CYTHON_COMPILING_IN_CPYTHON
-    PyObject *module = __Pyx__ImportDottedModule_Lookup(name);
+    PyObject *module = __Pyx__ImportDottedModule_Lookup(__PYX_CONTEXT_CALL(,) name);
     if (likely(module)) {
         // CPython guards against thread-concurrent initialisation in importlib.
         // In this case, we let PyImport_ImportModuleLevelObject() handle the locking.
@@ -130,26 +130,26 @@ static PyObject *__Pyx_ImportDottedModule(PyObject *name, PyObject *parts_tuple)
     }
 #endif
 
-    return __Pyx__ImportDottedModule(name, parts_tuple);
+    return __Pyx__ImportDottedModule(__PYX_CONTEXT_CALL(,) name, parts_tuple);
 }
 
 
 /////////////// ImportDottedModuleRelFirst.proto ///////////////
 
-static PyObject *__Pyx_ImportDottedModuleRelFirst(PyObject *name, PyObject *parts_tuple); /*proto*/
+static PyObject *__Pyx_ImportDottedModuleRelFirst(__PYX_CONTEXT_FIRST_ARG_DEF PyObject *name, PyObject *parts_tuple); /*proto*/
 
 /////////////// ImportDottedModuleRelFirst ///////////////
 //@requires: ImportDottedModule
 //@requires: Import
 
-static PyObject *__Pyx_ImportDottedModuleRelFirst(PyObject *name, PyObject *parts_tuple) {
+static PyObject *__Pyx_ImportDottedModuleRelFirst(__PYX_CONTEXT_FIRST_ARG_DEF PyObject *name, PyObject *parts_tuple) {
     PyObject *module;
     PyObject *from_list = NULL;
-    module = __Pyx_Import(name, from_list, -1);
+    module = __Pyx_Import(__PYX_CONTEXT_CALL(,) name, from_list, -1);
     Py_XDECREF(from_list);
     if (module) {
         if (parts_tuple) {
-            module = __Pyx_ImportDottedModule_WalkParts(module, name, parts_tuple);
+            module = __Pyx_ImportDottedModule_WalkParts(__PYX_CONTEXT_CALL(,) module, name, parts_tuple);
         }
         return module;
     }
@@ -157,19 +157,19 @@ static PyObject *__Pyx_ImportDottedModuleRelFirst(PyObject *name, PyObject *part
         return NULL;
     PyErr_Clear();
     // try absolute import
-    return __Pyx_ImportDottedModule(name, parts_tuple);
+    return __Pyx_ImportDottedModule(__PYX_CONTEXT_CALL(,) name, parts_tuple);
 }
 
 
 /////////////// Import.proto ///////////////
 
-static PyObject *__Pyx_Import(PyObject *name, PyObject *from_list, int level); /*proto*/
+static PyObject *__Pyx_Import(__PYX_CONTEXT_FIRST_ARG_DEF PyObject *name, PyObject *from_list, int level); /*proto*/
 
 /////////////// Import ///////////////
 //@requires: ObjectHandling.c::PyObjectGetAttrStr
 //@requires:StringTools.c::IncludeStringH
 
-static PyObject *__Pyx_Import(PyObject *name, PyObject *from_list, int level) {
+static PyObject *__Pyx_Import(__PYX_CONTEXT_FIRST_ARG_DEF PyObject *name, PyObject *from_list, int level) {
     PyObject *module = 0;
     PyObject *empty_dict = 0;
     PyObject *empty_list = 0;
@@ -202,12 +202,12 @@ bad:
 
 /////////////// ImportFrom.proto ///////////////
 
-static PyObject* __Pyx_ImportFrom(PyObject* module, PyObject* name); /*proto*/
+static PyObject* __Pyx_ImportFrom(__PYX_CONTEXT_FIRST_ARG_DEF PyObject* module, PyObject* name); /*proto*/
 
 /////////////// ImportFrom ///////////////
 //@requires: ObjectHandling.c::PyObjectGetAttrStr
 
-static PyObject* __Pyx_ImportFrom(PyObject* module, PyObject* name) {
+static PyObject* __Pyx_ImportFrom(__PYX_CONTEXT_FIRST_ARG_DEF PyObject* module, PyObject* name) {
     PyObject* value = __Pyx_PyObject_GetAttrStr(module, name);
     if (unlikely(!value) && PyErr_ExceptionMatches(PyExc_AttributeError)) {
         // 'name' may refer to a (sub-)module which has not finished initialization

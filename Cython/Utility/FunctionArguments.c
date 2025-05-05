@@ -7,11 +7,11 @@
     ((likely(__Pyx_IS_TYPE(obj, type) | (none_allowed && (obj == Py_None)))) ? 1 : \
         __Pyx__ArgTypeTest(obj, type, name, exact))
 
-static int __Pyx__ArgTypeTest(PyObject *obj, PyTypeObject *type, const char *name, int exact); /*proto*/
+static int __Pyx__ArgTypeTest(__PYX_CONTEXT_DEF_FIRST_ARG_DEF PyObject *obj, PyTypeObject *type, const char *name, int exact); /*proto*/
 
 //////////////////// ArgTypeTest ////////////////////
 
-static int __Pyx__ArgTypeTest(PyObject *obj, PyTypeObject *type, const char *name, int exact)
+static int __Pyx__ArgTypeTest(__PYX_CONTEXT_DEF_FIRST_ARG_DEF PyObject *obj, PyTypeObject *type, const char *name, int exact)
 {
     __Pyx_TypeName type_name;
     __Pyx_TypeName obj_type_name;
@@ -30,8 +30,8 @@ static int __Pyx__ArgTypeTest(PyObject *obj, PyTypeObject *type, const char *nam
             extra_info = PYUNICODE("Note that Cython is deliberately stricter than PEP-484 and rejects subclasses of builtin types. If you need to pass subclasses then set the 'annotation_typing' directive to False.");
         }
     }
-    type_name = __Pyx_PyType_GetFullyQualifiedName(type);
-    obj_type_name = __Pyx_PyType_GetFullyQualifiedName(Py_TYPE(obj));
+    type_name = __Pyx_PyType_GetFullyQualifiedName(__PYX_CONTEXT_CALL(,) type);
+    obj_type_name = __Pyx_PyType_GetFullyQualifiedName(__PYX_CONTEXT_CALL(,) Py_TYPE(obj));
     PyErr_Format(PyExc_TypeError,
         "Argument '%.200s' has incorrect type (expected " __Pyx_FMT_TYPENAME
         ", got " __Pyx_FMT_TYPENAME ")"
@@ -714,13 +714,13 @@ static int __Pyx_ParseKeywords(
 
 //////////////////// MergeKeywords.proto ////////////////////
 
-static int __Pyx_MergeKeywords(PyObject *kwdict, PyObject *source_mapping); /*proto*/
+static int __Pyx_MergeKeywords(__PYX_CONTEXT_FIRST_ARG_DEF PyObject *kwdict, PyObject *source_mapping); /*proto*/
 
 //////////////////// MergeKeywords ////////////////////
 //@requires: RaiseDoubleKeywords
 //@requires: Optimize.c::dict_iter
 
-static int __Pyx_MergeKeywords_dict(PyObject *kwdict, PyObject *source_dict) {
+static int __Pyx_MergeKeywords_dict(__PYX_CONTEXT_DEF_FIRST_ARG_DEF PyObject *kwdict, PyObject *source_dict) {
     Py_ssize_t len1, len2;
 
     len2 = PyDict_Size(source_dict);
@@ -772,7 +772,7 @@ static int __Pyx_MergeKeywords_dict(PyObject *kwdict, PyObject *source_dict) {
     return PyDict_Update(kwdict, source_dict);
 }
 
-static int __Pyx_MergeKeywords_any(PyObject *kwdict, PyObject *source_mapping) {
+static int __Pyx_MergeKeywords_any(__PYX_CONTEXT_FIRST_ARG_DEF PyObject *kwdict, PyObject *source_mapping) {
     PyObject *iter, *key = NULL, *value = NULL;
     int source_is_dict, result;
     Py_ssize_t orig_length, ppos = 0;
@@ -830,12 +830,12 @@ bad:
     return -1;
 }
 
-static CYTHON_INLINE int __Pyx_MergeKeywords(PyObject *kwdict, PyObject *source_mapping) {
+static CYTHON_INLINE int __Pyx_MergeKeywords(__PYX_CONTEXT_FIRST_ARG_DEF PyObject *kwdict, PyObject *source_mapping) {
     assert(PyDict_Check(kwdict));
     if (likely(PyDict_Check(source_mapping))) {
-        return __Pyx_MergeKeywords_dict(kwdict, source_mapping);
+        return __Pyx_MergeKeywords_dict(__PYX_CONTEXT_CALL(,) kwdict, source_mapping);
     } else {
-        return __Pyx_MergeKeywords_any(kwdict, source_mapping);
+        return __Pyx_MergeKeywords_any(__PYX_CONTEXT_CALL(,) kwdict, source_mapping);
     }
 }
 
@@ -866,7 +866,7 @@ static CYTHON_INLINE int __Pyx_MergeKeywords(PyObject *kwdict, PyObject *source_
     #define __Pyx_ArgRef_FASTCALL(args, i) __Pyx_NewRef(args[i])
     #define __Pyx_NumKwargs_FASTCALL(kwds) __Pyx_PyTuple_GET_SIZE(kwds)
     #define __Pyx_KwValues_FASTCALL(args, nargs) ((args) + (nargs))
-    static CYTHON_INLINE PyObject * __Pyx_GetKwValue_FASTCALL(PyObject *kwnames, PyObject *const *kwvalues, PyObject *s);
+    static CYTHON_INLINE PyObject * __Pyx_GetKwValue_FASTCALL(__PYX_CONTEXT_FIRST_ARG_DEF PyObject *kwnames, PyObject *const *kwvalues, PyObject *s);
   #if CYTHON_COMPILING_IN_CPYTHON && PY_VERSION_HEX >= 0x030d0000 || CYTHON_COMPILING_IN_LIMITED_API
     CYTHON_UNUSED static PyObject *__Pyx_KwargsAsDict_FASTCALL(PyObject *kwnames, PyObject *const *kwvalues);/*proto*/
   #else
@@ -896,7 +896,7 @@ static CYTHON_INLINE int __Pyx_MergeKeywords(PyObject *kwdict, PyObject *source_
 // kwnames: tuple with names of keyword arguments
 // kwvalues: C array with values of keyword arguments
 // s: str with the keyword name to look for
-static CYTHON_INLINE PyObject * __Pyx_GetKwValue_FASTCALL(PyObject *kwnames, PyObject *const *kwvalues, PyObject *s)
+static CYTHON_INLINE PyObject * __Pyx_GetKwValue_FASTCALL(__PYX_CONTEXT_DEF_FIRST_ARG_DEF PyObject *kwnames, PyObject *const *kwvalues, PyObject *s)
 {
     // Search the kwnames array for s and return the corresponding value.
     // We do two loops: a first one to compare pointers (which will find a

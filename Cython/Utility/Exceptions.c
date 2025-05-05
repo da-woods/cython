@@ -838,7 +838,7 @@ static int __Pyx_CLineForTraceback(PyThreadState *tstate, int c_line) {
 
 /////////////// AddTraceback.proto ///////////////
 
-static void __Pyx_AddTraceback(const char *funcname, int c_line,
+static void __Pyx_AddTraceback(__PYX_CONTEXT_DEF_FIRST_ARG_DEF const char *funcname, int c_line,
                                int py_line, const char *filename); /*proto*/
 
 /////////////// AddTraceback ///////////////
@@ -874,7 +874,7 @@ static PyObject *__Pyx_PyCode_Replace_For_AddTraceback(PyObject *code, PyObject 
     return NULL;
 }
 
-static void __Pyx_AddTraceback(const char *funcname, int c_line,
+static void __Pyx_AddTraceback(__PYX_CONTEXT_DEF_FIRST_ARG_DEF const char *funcname, int c_line,
                                int py_line, const char *filename) {
     PyObject *code_object = NULL, *py_py_line = NULL, *py_funcname = NULL, *dict = NULL;
     PyObject *replace = NULL, *getframe = NULL, *frame = NULL;

@@ -509,7 +509,7 @@ static void __Pyx_SetBackportTypeAmSend(PyTypeObject *type, __Pyx_PyAsyncMethods
 #define __Pyx_Coroutine_New(body, code, closure, name, qualname, module_name)  \
     __Pyx__Coroutine_New(CGLOBAL(__pyx_CoroutineType), body, code, closure, name, qualname, module_name)
 
-static int __pyx_Coroutine_init(PyObject *module); /*proto*/
+static int __pyx_Coroutine_init(__PYX_CONTEXT_DEF_FIRST_ARG_DEF PyObject *module); /*proto*/
 static PyObject *__Pyx__Coroutine_await(PyObject *coroutine); /*proto*/
 
 typedef struct {
@@ -1906,12 +1906,12 @@ static PyType_Spec __pyx_CoroutineType_spec = {
 static __Pyx_PyAsyncMethodsStruct __pyx_Coroutine_as_async;
 #endif
 
-static int __pyx_Coroutine_init(PyObject *module) {
+static int __pyx_Coroutine_init(__PYX_CONTEXT_DEF_FIRST_ARG_DEF PyObject *module) {
     $modulestatetype_cname *mstate;
     CYTHON_MAYBE_UNUSED_VAR(module);
     // on Windows, C-API functions can't be used in slots statically
     mstate = __Pyx_PyModule_GetState(module);
-    mstate->__pyx_CoroutineType = __Pyx_FetchCommonTypeFromSpec(module, &__pyx_CoroutineType_spec, NULL);
+    mstate->__pyx_CoroutineType = __Pyx_FetchCommonTypeFromSpec(__PYX_CONTEXT_CALL(,) module, &__pyx_CoroutineType_spec, NULL);
     if (unlikely(!mstate->__pyx_CoroutineType))
         return -1;
 #if __PYX_HAS_PY_AM_SEND == 2
@@ -1923,7 +1923,7 @@ static int __pyx_Coroutine_init(PyObject *module) {
         return -1;
 #endif
 
-    mstate->__pyx_CoroutineAwaitType = __Pyx_FetchCommonTypeFromSpec(module, &__pyx_CoroutineAwaitType_spec, NULL);
+    mstate->__pyx_CoroutineAwaitType = __Pyx_FetchCommonTypeFromSpec(__PYX_CONTEXT_CALL(,) module, &__pyx_CoroutineAwaitType_spec, NULL);
     if (unlikely(!mstate->__pyx_CoroutineAwaitType))
         return -1;
 #if __PYX_HAS_PY_AM_SEND == 2
@@ -1984,7 +1984,7 @@ static PyType_Spec __pyx_IterableCoroutineType_spec = {
 
 static int __pyx_IterableCoroutine_init(PyObject *module) {
     $modulestatetype_cname *mstate = __Pyx_PyModule_GetState(module);
-    mstate->__pyx_IterableCoroutineType = __Pyx_FetchCommonTypeFromSpec(module, &__pyx_IterableCoroutineType_spec, NULL);
+    mstate->__pyx_IterableCoroutineType = __Pyx_FetchCommonTypeFromSpec(__PYX_CONTEXT_CALL(,) module, &__pyx_IterableCoroutineType_spec, NULL);
     if (unlikely(!mstate->__pyx_IterableCoroutineType))
         return -1;
 #if __PYX_HAS_PY_AM_SEND == 2
@@ -2063,7 +2063,7 @@ static __Pyx_PyAsyncMethodsStruct __pyx_Generator_as_async;
 
 static int __pyx_Generator_init(PyObject *module) {
     $modulestatetype_cname *mstate = __Pyx_PyModule_GetState(module);
-    mstate->__pyx_GeneratorType = __Pyx_FetchCommonTypeFromSpec(module, &__pyx_GeneratorType_spec, NULL);
+    mstate->__pyx_GeneratorType = __Pyx_FetchCommonTypeFromSpec(__PYX_CONTEXT_CALL(,) module, &__pyx_GeneratorType_spec, NULL);
     if (unlikely(!mstate->__pyx_GeneratorType)) {
         return -1;
     }

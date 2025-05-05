@@ -772,8 +772,8 @@ class ModuleNode(Nodes.Node, Nodes.BlockNode):
             self.generate_cfunction_declarations(module, modulecode, defined_here)
 
     @staticmethod
-    def _put_setup_code(code, name):
-        code.put_code_here(UtilityCode.load(name, "ModuleSetupCode.c"))
+    def _put_setup_code(code, name, utility_code_file="ModuleSetupCode.c"):
+        code.put_code_here(UtilityCode.load(name, utility_code_file))
 
     def generate_module_preamble(self, env, options, cimported_modules, metadata, code):
         code.put_generated_by()
@@ -810,6 +810,7 @@ class ModuleNode(Nodes.Node, Nodes.BlockNode):
             self._put_setup_code(code, "CppInitCode")
         else:
             self._put_setup_code(code, "CInitCode")
+        self._put_setup_code("HPyInitCode", "HPyUtils.c")
         self._put_setup_code(code, "PythonCompatibility")
         self._put_setup_code(code, "MathInitCode")
 
@@ -2228,7 +2229,7 @@ class ModuleNode(Nodes.Node, Nodes.BlockNode):
                 code.putln("PyObject *ret;")
                 code.putln("ret = %s(o1, o2);" % comp_entry[ordering_source].func_cname)
                 code.putln("if (likely(ret && ret != Py_NotImplemented)) {")
-                code.putln("int order_res = __Pyx_PyObject_IsTrue(ret);")
+                code.putln("int order_res = __Pyx_PyObject_IsTrue(__PYX_CONTEXT_CALL(,) ret);")
                 code.putln("Py_DECREF(ret);")
                 code.putln("if (unlikely(order_res < 0)) return NULL;")
                 # We may need to check equality too. For some combos it's never required.
@@ -2253,7 +2254,7 @@ class ModuleNode(Nodes.Node, Nodes.BlockNode):
 
                     code.putln("ret = %s(o1, o2);" % comp_entry[eq_func].func_cname)
                     code.putln("if (likely(ret && ret != Py_NotImplemented)) {")
-                    code.putln("int eq_res = __Pyx_PyObject_IsTrue(ret);")
+                    code.putln("int eq_res = __Pyx_PyObject_IsTrue(__PYX_CONTEXT_CALL(,) ret);")
                     code.putln("Py_DECREF(ret);")
                     code.putln("if (unlikely(eq_res < 0)) return NULL;")
                     if invert_equals:
@@ -2283,7 +2284,7 @@ class ModuleNode(Nodes.Node, Nodes.BlockNode):
             #code.putln("if (o1 == o2) return __Pyx_NewRef(Py_False);")
             code.putln("ret = %s(o1, o2);" % comp_entry['__eq__'].func_cname)
             code.putln("if (likely(ret && ret != Py_NotImplemented)) {")
-            code.putln("int b = __Pyx_PyObject_IsTrue(ret);")
+            code.putln("int b = __Pyx_PyObject_IsTrue(__PYX_CONTEXT_CALL(,) ret);")
             code.putln("Py_DECREF(ret);")
             code.putln("if (unlikely(b < 0)) return NULL;")
             code.putln("ret = (b) ? Py_False : Py_True;")
@@ -3075,7 +3076,7 @@ class ModuleNode(Nodes.Node, Nodes.BlockNode):
 
         for ext_type in ('CyFunction', 'FusedFunction', 'Coroutine', 'Generator', 'AsyncGen'):
             code.putln("#ifdef __Pyx_%s_USED" % ext_type)
-            code.put_error_if_neg(self.pos, "__pyx_%s_init(%s)" % (ext_type, env.module_cname))
+            code.put_error_if_neg(self.pos, "__pyx_%s_init(__PYX_CONTEXT_CALL(,) %s)" % (ext_type, env.module_cname))
             code.putln("#endif")
 
         code.putln("/*--- Library function declarations ---*/")
@@ -3083,7 +3084,7 @@ class ModuleNode(Nodes.Node, Nodes.BlockNode):
             code.put_error_if_neg(self.pos, "_import_array()")
 
         code.putln("/*--- Initialize various global constants etc. ---*/")
-        code.put_error_if_neg(self.pos, f"__Pyx_InitConstants({Naming.modulestatevalue_cname})")
+        code.put_error_if_neg(self.pos, f"__Pyx_InitConstants(__PYX_CONTEXT_CALL(,) {Naming.modulestatevalue_cname})")
         code.putln("stringtab_initialized = 1;")
         code.put_error_if_neg(self.pos, "__Pyx_InitGlobals()")  # calls any utility code
 
@@ -3101,16 +3102,16 @@ class ModuleNode(Nodes.Node, Nodes.BlockNode):
             code.putln("/*--- Builtin init code ---*/")
             code.put_error_if_neg(
                 self.pos,
-                f"__Pyx_InitCachedBuiltins({Naming.modulestatevalue_cname})")
+                f"__Pyx_InitCachedBuiltins(__PYX_CONTEXT_CALL(,) {Naming.modulestatevalue_cname})")
 
         code.putln("/*--- Constants init code ---*/")
         code.put_error_if_neg(
             self.pos,
-            f"__Pyx_InitCachedConstants({Naming.modulestatevalue_cname})")
+            f"__Pyx_InitCachedConstants(__PYX_CONTEXT_CALL(,) {Naming.modulestatevalue_cname})")
         # code objects come after the other globals (since they use strings and tuples)
         code.put_error_if_neg(
             self.pos,
-            f"__Pyx_CreateCodeObjects({Naming.modulestatevalue_cname})")
+            f"__Pyx_CreateCodeObjects(__PYX_CONTEXT_CALL(,) {Naming.modulestatevalue_cname})")
 
         code.putln("/*--- Global type/function init code ---*/")
 

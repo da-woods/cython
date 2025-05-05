@@ -840,6 +840,7 @@ def _inject_unbound_method(output, matchobj):
     args = [arg.strip() for arg in args[1:].split(',')] if args else []
     assert len(args) < 3, f"CALL_UNBOUND_METHOD() does not support {len(args):d} call arguments"
     return output.cached_unbound_method_call_code(
+        "__PYX_CONTEXT_CALL(,)"
         f"{Naming.modulestateglobal_cname}->",
         obj_cname, type_cname, method_name, args)
 
@@ -1463,12 +1464,14 @@ class GlobalState:
             w = self.parts['cached_builtins']
             w.start_initcfunc(
                 "int __Pyx_InitCachedBuiltins("
+                "__PYX_CONTEXT_DEF_FIRST_ARG_DEF "
                 f"{Naming.modulestatetype_cname} *{Naming.modulestatevalue_cname})")
             w.putln(f"CYTHON_UNUSED_VAR({Naming.modulestatevalue_cname});")
 
         w = self.parts['cached_constants']
         w.start_initcfunc(
             "int __Pyx_InitCachedConstants("
+            "__PYX_CONTEXT_DEF_FIRST_ARG_DEF "
             f"{Naming.modulestatetype_cname} *{Naming.modulestatevalue_cname})",
             refnanny=True)
         w.putln(f"CYTHON_UNUSED_VAR({Naming.modulestatevalue_cname});")
@@ -1480,6 +1483,7 @@ class GlobalState:
         w = self.parts['init_constants']
         w.start_initcfunc(
             "int __Pyx_InitConstants("
+            "__PYX_CONTEXT_DEF_FIRST_ARG_DEF "
             f"{Naming.modulestatetype_cname} *{Naming.modulestatevalue_cname})")
         w.putln(f"CYTHON_UNUSED_VAR({Naming.modulestatevalue_cname});")
 
@@ -1755,7 +1759,7 @@ class GlobalState:
             self.get_interned_identifier(name).cname)
         self.use_utility_code(
             UtilityCode.load_cached("GetBuiltinName", "ObjectHandling.c"))
-        w.putln('%s = __Pyx_GetBuiltinName(%s); if (!%s) %s' % (
+        w.putln('%s = __Pyx_GetBuiltinName(__PYX_CONTEXT_CALL(,) %s); if (!%s) %s' % (
             cname,
             cname_in_modulestate,
             cname,
@@ -1964,7 +1968,7 @@ class GlobalState:
 
         init_constants = self.parts['init_constants']
         init_constants.putln(
-            "if (__Pyx_InitStrings(%s, %s, %s) < 0) %s;" % (
+            "if (__Pyx_InitStrings(__PYX_CONTEXT_CALL(,) %s, %s, %s) < 0) %s;" % (
                 Naming.stringtab_cname,
                 init_constants.name_in_main_c_code_module_state(Naming.stringtab_cname),
                 Naming.stringtab_encodings_cname,
@@ -3057,7 +3061,7 @@ class CCodeWriter:
         )
 
         self.funcstate.uses_error_indicator = True
-        self.putln('__Pyx_AddTraceback(%s, %s, %s, %s);' % format_tuple)
+        self.putln('__Pyx_AddTraceback(__PYX_CONTEXT_CALL(,) %s, %s, %s, %s);' % format_tuple)
 
     def put_unraisable(self, qualified_name, nogil=False):
         """

@@ -369,7 +369,7 @@ static PyObject *__Pyx_PyObject_GetIndex(PyObject *obj, PyObject *index) {
     return NULL;
 }
 
-static PyObject *__Pyx_PyObject_GetItem_Slow(PyObject *obj, PyObject *key) {
+static PyObject *__Pyx_PyObject_GetItem_Slow(__PYX_CONTEXT_FIRST_ARG_DEF PyObject *obj, PyObject *key) {
     __Pyx_TypeName obj_type_name;
     // Handles less common slow-path checks for GetItem
     if (likely(PyType_Check(obj))) {
@@ -377,7 +377,7 @@ static PyObject *__Pyx_PyObject_GetItem_Slow(PyObject *obj, PyObject *key) {
         if (!meth) {
             PyErr_Clear();
         } else {
-            PyObject *result = __Pyx_PyObject_CallOneArg(meth, key);
+            PyObject *result = __Pyx_PyObject_CallOneArg(__PYX_CONTEXT_CALL(,) meth, key);
             Py_DECREF(meth);
             return result;
         }
@@ -390,7 +390,7 @@ static PyObject *__Pyx_PyObject_GetItem_Slow(PyObject *obj, PyObject *key) {
     return NULL;
 }
 
-static PyObject *__Pyx_PyObject_GetItem(PyObject *obj, PyObject *key) {
+static PyObject *__Pyx_PyObject_GetItem(__PYX_CONTEXT_FIRST_ARG_DEF PyObject *obj, PyObject *key) {
     PyTypeObject *tp = Py_TYPE(obj);
     PyMappingMethods *mm = tp->tp_as_mapping;
     PySequenceMethods *sm = tp->tp_as_sequence;
@@ -401,7 +401,7 @@ static PyObject *__Pyx_PyObject_GetItem(PyObject *obj, PyObject *key) {
     if (likely(sm && sm->sq_item)) {
         return __Pyx_PyObject_GetIndex(obj, key);
     }
-    return __Pyx_PyObject_GetItem_Slow(obj, key);
+    return __Pyx_PyObject_GetItem_Slow(__PYX_CONTEXT_CALL(,) obj, key);
 }
 #endif
 
@@ -1034,14 +1034,16 @@ static PyObject *__Pyx_Py3MetaclassGet(PyObject *bases, PyObject *mkw) {
 
 /////////////// CreateClass.proto ///////////////
 
-static PyObject *__Pyx_CreateClass(PyObject *bases, PyObject *dict, PyObject *name,
+static PyObject *__Pyx_CreateClass(__PYX_CONTEXT_FIRST_ARG_DEF
+                                   PyObject *bases, PyObject *dict, PyObject *name,
                                    PyObject *qualname, PyObject *modname); /*proto*/
 
 /////////////// CreateClass ///////////////
 //@requires: FindInheritedMetaclass
 //@requires: CalculateMetaclass
 
-static PyObject *__Pyx_CreateClass(PyObject *bases, PyObject *dict, PyObject *name,
+static PyObject *__Pyx_CreateClass(__PYX_CONTEXT_FIRST_ARG_DEF
+                                   PyObject *bases, PyObject *dict, PyObject *name,
                                    PyObject *qualname, PyObject *modname) {
     PyObject *result;
     PyObject *metaclass;
@@ -1057,7 +1059,7 @@ static PyObject *__Pyx_CreateClass(PyObject *bases, PyObject *dict, PyObject *na
         Py_INCREF(metaclass);
         if (PyType_Check(metaclass)) {
             PyObject* orig = metaclass;
-            metaclass = __Pyx_CalculateMetaclass((PyTypeObject*) metaclass, bases);
+            metaclass = __Pyx_CalculateMetaclass(__PYX_CONTEXT_CALL(,) (PyTypeObject*) metaclass, bases);
             Py_DECREF(orig);
         }
     } else {
@@ -1072,7 +1074,7 @@ static PyObject *__Pyx_CreateClass(PyObject *bases, PyObject *dict, PyObject *na
 
 /////////////// Py3UpdateBases.proto ///////////////
 
-static PyObject* __Pyx_PEP560_update_bases(PyObject *bases); /* proto */
+static PyObject* __Pyx_PEP560_update_bases(__PYX_CONTEXT_FIRST_ARG_DEF PyObject *bases); /* proto */
 
 /////////////// Py3UpdateBases /////////////////////
 //@requires: PyObjectCallOneArg
@@ -1080,7 +1082,7 @@ static PyObject* __Pyx_PEP560_update_bases(PyObject *bases); /* proto */
 
 /* Shamelessly adapted from cpython/bltinmodule.c update_bases */
 static PyObject*
-__Pyx_PEP560_update_bases(PyObject *bases)
+__Pyx_PEP560_update_bases(__PYX_CONTEXT_FIRST_ARG_DEF PyObject *bases)
 {
     Py_ssize_t i, j, size_bases;
     PyObject *base = NULL, *meth, *new_base, *result, *new_bases = NULL;
@@ -1130,7 +1132,7 @@ __Pyx_PEP560_update_bases(PyObject *bases)
             }
             continue;
         }
-        new_base = __Pyx_PyObject_CallOneArg(meth, bases);
+        new_base = __Pyx_PyObject_CallOneArg(__PYX_CONTEXT_CALL(,) meth, bases);
         Py_DECREF(meth);
         if (!new_base) {
             goto error;
@@ -1196,9 +1198,11 @@ error:
 
 /////////////// Py3ClassCreate.proto ///////////////
 
-static PyObject *__Pyx_Py3MetaclassPrepare(PyObject *metaclass, PyObject *bases, PyObject *name, PyObject *qualname,
+static PyObject *__Pyx_Py3MetaclassPrepare(__PYX_CONTEXT_FIRST_ARG_DEF
+                                           PyObject *metaclass, PyObject *bases, PyObject *name, PyObject *qualname,
                                            PyObject *mkw, PyObject *modname, PyObject *doc); /*proto*/
-static PyObject *__Pyx_Py3ClassCreate(PyObject *metaclass, PyObject *name, PyObject *bases, PyObject *dict,
+static PyObject *__Pyx_Py3ClassCreate(__PYX_CONTEXT_FIRST_ARG_DEF
+                                      PyObject *metaclass, PyObject *name, PyObject *bases, PyObject *dict,
                                       PyObject *mkw, int calculate_metaclass, int allow_py2_metaclass); /*proto*/
 
 /////////////// Py3ClassCreate ///////////////
@@ -1209,7 +1213,8 @@ static PyObject *__Pyx_Py3ClassCreate(PyObject *metaclass, PyObject *name, PyObj
 //@requires: PyObjectLookupSpecial
 // only in fallback code:
 
-static PyObject *__Pyx_Py3MetaclassPrepare(PyObject *metaclass, PyObject *bases, PyObject *name,
+static PyObject *__Pyx_Py3MetaclassPrepare(__PYX_CONTEXT_FIRST_ARG_DEF
+                                           PyObject *metaclass, PyObject *bases, PyObject *name,
                                            PyObject *qualname, PyObject *mkw, PyObject *modname, PyObject *doc) {
     PyObject *ns;
     if (metaclass) {
@@ -1240,7 +1245,8 @@ bad:
     return NULL;
 }
 
-static PyObject *__Pyx_Py3ClassCreate(PyObject *metaclass, PyObject *name, PyObject *bases,
+static PyObject *__Pyx_Py3ClassCreate(__PYX_CONTEXT_FIRST_ARG_DEF
+                                      PyObject *metaclass, PyObject *name, PyObject *bases,
                                       PyObject *dict, PyObject *mkw,
                                       int calculate_metaclass, int allow_py2_metaclass) {
     PyObject *result;
@@ -1258,7 +1264,7 @@ static PyObject *__Pyx_Py3ClassCreate(PyObject *metaclass, PyObject *name, PyObj
         }
     }
     if (calculate_metaclass && (!metaclass || PyType_Check(metaclass))) {
-        metaclass = __Pyx_CalculateMetaclass((PyTypeObject*) metaclass, bases);
+        metaclass = __Pyx_CalculateMetaclass(__PYX_CONTEXT_CALL(,) (PyTypeObject*) metaclass, bases);
         Py_XDECREF(owned_metaclass);
         if (unlikely(!metaclass))
             return NULL;
@@ -1355,12 +1361,12 @@ static CYTHON_INLINE PyObject* __Pyx_PyBoolOrNull_FromLong(long b) {
 
 /////////////// GetBuiltinName.proto ///////////////
 
-static PyObject *__Pyx_GetBuiltinName(PyObject *name); /*proto*/
+static PyObject *__Pyx_GetBuiltinName(__PYX_CONTEXT_FIRST_ARG_DEF PyObject *name); /*proto*/
 
 /////////////// GetBuiltinName ///////////////
 //@requires: PyObjectGetAttrStrNoError
 
-static PyObject *__Pyx_GetBuiltinName(PyObject *name) {
+static PyObject *__Pyx_GetBuiltinName(__PYX_CONTEXT_FIRST_ARG_DEF PyObject *name) {
     PyObject* result = __Pyx_PyObject_GetAttrStrNoError(NAMED_CGLOBAL(builtins_cname), name);
     if (unlikely(!result) && !PyErr_Occurred()) {
         PyErr_Format(PyExc_NameError,
@@ -1483,7 +1489,7 @@ static CYTHON_INLINE PyObject *__Pyx__GetModuleGlobalName(PyObject *name); /*pro
 #if CYTHON_USE_DICT_VERSIONS
 static PyObject *__Pyx__GetModuleGlobalName(PyObject *name, PY_UINT64_T *dict_version, PyObject **dict_cached_value)
 #else
-static CYTHON_INLINE PyObject *__Pyx__GetModuleGlobalName(PyObject *name)
+static CYTHON_INLINE PyObject *__Pyx__GetModuleGlobalName(__PYX_CONTEXT_FIRST_ARG_DEF PyObject *name)
 #endif
 {
     PyObject *result;
@@ -1513,7 +1519,7 @@ static CYTHON_INLINE PyObject *__Pyx__GetModuleGlobalName(PyObject *name)
     }
     PyErr_Clear();
 #endif
-    return __Pyx_GetBuiltinName(name);
+    return __Pyx_GetBuiltinName(__PYX_CONTEXT_CALL(,) name);
 }
 
 //////////////////// GetAttr.proto ////////////////////
@@ -1843,7 +1849,7 @@ static PyMethodDef __Pyx_UnboundCMethod_Def = {
     /* .ml_doc   = */ NULL
 };
 
-static int __Pyx_TryUnpackUnboundCMethod(__Pyx_CachedCFunction* target) {
+static int __Pyx_TryUnpackUnboundCMethod(__PYX_CONTEXT_FIRST_ARG_DEF __Pyx_CachedCFunction* target) {
     PyObject *method, *result=NULL;
     method = __Pyx_PyObject_GetAttrStr(target->type, *target->method_name);
     if (unlikely(!method))
@@ -1911,12 +1917,12 @@ static int __Pyx_TryUnpackUnboundCMethod(__Pyx_CachedCFunction* target) {
 /////////////// CallUnboundCMethod0.proto ///////////////
 
 CYTHON_UNUSED
-static PyObject* __Pyx__CallUnboundCMethod0(__Pyx_CachedCFunction* cfunc, PyObject* self); /*proto*/
+static PyObject* __Pyx__CallUnboundCMethod0(__PYX_CONTEXT_FIRST_ARG_DEF __Pyx_CachedCFunction* cfunc, PyObject* self); /*proto*/
 
 #if CYTHON_COMPILING_IN_CPYTHON
 static CYTHON_INLINE PyObject* __Pyx_CallUnboundCMethod0(__Pyx_CachedCFunction* cfunc, PyObject* self); /* proto */
 #else
-#define __Pyx_CallUnboundCMethod0(cfunc, self)  __Pyx__CallUnboundCMethod0(cfunc, self)
+#define __Pyx_CallUnboundCMethod0(cfunc, self)  __Pyx__CallUnboundCMethod0(__PYX_CONTEXT_CALL(,) cfunc, self)
 #endif
 
 /////////////// CallUnboundCMethod0 ///////////////
@@ -1961,10 +1967,10 @@ static CYTHON_INLINE PyObject* __Pyx_CallUnboundCMethod0(__Pyx_CachedCFunction* 
 }
 #endif
 
-static PyObject* __Pyx__CallUnboundCMethod0(__Pyx_CachedCFunction* cfunc, PyObject* self) {
+static PyObject* __Pyx__CallUnboundCMethod0(__PYX_CONTEXT_FIRST_ARG_DEF __Pyx_CachedCFunction* cfunc, PyObject* self) {
     PyObject *result;
-    if (unlikely(!cfunc->method) && unlikely(__Pyx_TryUnpackUnboundCMethod(cfunc) < 0)) return NULL;
-    result = __Pyx_PyObject_CallOneArg(cfunc->method, self);
+    if (unlikely(!cfunc->method) && unlikely(__Pyx_TryUnpackUnboundCMethod(__PYX_CONTEXT_CALL(,) cfunc) < 0)) return NULL;
+    result = __Pyx_PyObject_CallOneArg(__PYX_CONTEXT_CALL(,) cfunc->method, self);
     return result;
 }
 
@@ -1972,12 +1978,12 @@ static PyObject* __Pyx__CallUnboundCMethod0(__Pyx_CachedCFunction* cfunc, PyObje
 /////////////// CallUnboundCMethod1.proto ///////////////
 
 CYTHON_UNUSED
-static PyObject* __Pyx__CallUnboundCMethod1(__Pyx_CachedCFunction* cfunc, PyObject* self, PyObject* arg);/*proto*/
+static PyObject* __Pyx__CallUnboundCMethod1(__PYX_CONTEXT_FIRST_ARG_DEF, __Pyx_CachedCFunction* cfunc, PyObject* self, PyObject* arg);/*proto*/
 
 #if CYTHON_COMPILING_IN_CPYTHON
 static CYTHON_INLINE PyObject* __Pyx_CallUnboundCMethod1(__Pyx_CachedCFunction* cfunc, PyObject* self, PyObject* arg);/*proto*/
 #else
-#define __Pyx_CallUnboundCMethod1(cfunc, self, arg)  __Pyx__CallUnboundCMethod1(cfunc, self, arg)
+#define __Pyx_CallUnboundCMethod1(cfunc, self, arg)  __Pyx__CallUnboundCMethod1(__PYX_CONTEXT_CALL(,) cfunc, self, arg)
 #endif
 
 /////////////// CallUnboundCMethod1 ///////////////
@@ -2018,9 +2024,9 @@ static CYTHON_INLINE PyObject* __Pyx_CallUnboundCMethod1(__Pyx_CachedCFunction* 
 }
 #endif
 
-static PyObject* __Pyx__CallUnboundCMethod1(__Pyx_CachedCFunction* cfunc, PyObject* self, PyObject* arg){
+static PyObject* __Pyx__CallUnboundCMethod1(__PYX_CONTEXT_FIRST_ARG_DEF __Pyx_CachedCFunction* cfunc, PyObject* self, PyObject* arg){
     PyObject *result = NULL;
-    if (unlikely(!cfunc->func && !cfunc->method) && unlikely(__Pyx_TryUnpackUnboundCMethod(cfunc) < 0)) return NULL;
+    if (unlikely(!cfunc->func && !cfunc->method) && unlikely(__Pyx_TryUnpackUnboundCMethod(__PYX_CONTEXT_CALL(,) cfunc) < 0)) return NULL;
 #if CYTHON_COMPILING_IN_CPYTHON
     if (cfunc->func && (cfunc->flag & METH_VARARGS)) {
         PyObject *args = PyTuple_New(1);
@@ -2044,12 +2050,12 @@ static PyObject* __Pyx__CallUnboundCMethod1(__Pyx_CachedCFunction* cfunc, PyObje
 /////////////// CallUnboundCMethod2.proto ///////////////
 
 CYTHON_UNUSED
-static PyObject* __Pyx__CallUnboundCMethod2(__Pyx_CachedCFunction* cfunc, PyObject* self, PyObject* arg1, PyObject* arg2); /*proto*/
+static PyObject* __Pyx__CallUnboundCMethod2(__PYX_CONTEXT_FIRST_ARG_DEF __Pyx_CachedCFunction* cfunc, PyObject* self, PyObject* arg1, PyObject* arg2); /*proto*/
 
 #if CYTHON_COMPILING_IN_CPYTHON
 static CYTHON_INLINE PyObject *__Pyx_CallUnboundCMethod2(__Pyx_CachedCFunction *cfunc, PyObject *self, PyObject *arg1, PyObject *arg2); /*proto*/
 #else
-#define __Pyx_CallUnboundCMethod2(cfunc, self, arg1, arg2)  __Pyx__CallUnboundCMethod2(cfunc, self, arg1, arg2)
+#define __Pyx_CallUnboundCMethod2(cfunc, self, arg1, arg2)  __Pyx__CallUnboundCMethod2(__PYX_CONTEXT_CALL(,) cfunc, self, arg1, arg2)
 #endif
 
 /////////////// CallUnboundCMethod2 ///////////////
@@ -2088,8 +2094,8 @@ static CYTHON_INLINE PyObject *__Pyx_CallUnboundCMethod2(__Pyx_CachedCFunction *
 }
 #endif
 
-static PyObject* __Pyx__CallUnboundCMethod2(__Pyx_CachedCFunction* cfunc, PyObject* self, PyObject* arg1, PyObject* arg2){
-    if (unlikely(!cfunc->func && !cfunc->method) && unlikely(__Pyx_TryUnpackUnboundCMethod(cfunc) < 0)) return NULL;
+static PyObject* __Pyx__CallUnboundCMethod2(__PYX_CONTEXT_FIRST_ARG_DEF __Pyx_CachedCFunction* cfunc, PyObject* self, PyObject* arg1, PyObject* arg2){
+    if (unlikely(!cfunc->func && !cfunc->method) && unlikely(__Pyx_TryUnpackUnboundCMethod(__PYX_CONTEXT_CALL(,) cfunc) < 0)) return NULL;
 #if CYTHON_COMPILING_IN_CPYTHON
     if (cfunc->func && (cfunc->flag & METH_VARARGS)) {
         PyObject *result = NULL;
@@ -2109,15 +2115,18 @@ static PyObject* __Pyx__CallUnboundCMethod2(__Pyx_CachedCFunction* cfunc, PyObje
 #endif
     {
         PyObject *args[4] = {NULL, self, arg1, arg2};
-        return __Pyx_PyObject_FastCall(cfunc->method, args+1, 3 | __Pyx_PY_VECTORCALL_ARGUMENTS_OFFSET);
+        return __Pyx_PyObject_FastCall(__PYX_CONTEXT_CALL(,) cfunc->method, args+1, 3 | __Pyx_PY_VECTORCALL_ARGUMENTS_OFFSET);
     }
 }
 
 
 /////////////// PyObjectFastCall.proto ///////////////
 
-#define __Pyx_PyObject_FastCall(func, args, nargs)  __Pyx_PyObject_FastCallDict(func, args, (size_t)(nargs), NULL)
-static CYTHON_INLINE PyObject* __Pyx_PyObject_FastCallDict(PyObject *func, PyObject * const*args, size_t nargs, PyObject *kwargs); /*proto*/
+#define __Pyx_PyObject_FastCall(__PYX_CONTEXT_FIRST_ARG_MACRO_DEF func, args, nargs) \
+    __Pyx_PyObject_FastCallDict(__PYX_CONTEXT_CALL(,) func, args, (size_t)(nargs), NULL)
+static CYTHON_INLINE PyObject* __Pyx_PyObject_FastCallDict(
+    __PYX_CONTEXT_FIRST_ARG_DEF
+    PyObject *func, PyObject * const*args, size_t nargs, PyObject *kwargs); /*proto*/
 
 /////////////// PyObjectFastCall ///////////////
 //@requires: PyObjectCall
@@ -2173,7 +2182,9 @@ static CYTHON_INLINE vectorcallfunc __Pyx_PyVectorcall_Function(PyObject *callab
   #endif
 #endif
 
-static CYTHON_INLINE PyObject* __Pyx_PyObject_FastCallDict(PyObject *func, PyObject *const *args, size_t _nargs, PyObject *kwargs) {
+static CYTHON_INLINE PyObject* __Pyx_PyObject_FastCallDict(
+    __PYX_CONTEXT_FIRST_ARG_DEF
+    PyObject *func, PyObject *const *args, size_t _nargs, PyObject *kwargs) {
     // Special fast paths for 0 and 1 arguments
     // NOTE: in many cases, this is called with a constant value for nargs
     // which is known at compile-time. So the branches below will typically
@@ -2348,23 +2359,23 @@ static PyObject *__Pyx_Object_VectorcallMethod_CallFromBuilder(PyObject *name, P
 
 /////////////// PyObjectCallMethod0.proto ///////////////
 
-static PyObject* __Pyx_PyObject_CallMethod0(PyObject* obj, PyObject* method_name); /*proto*/
+static PyObject* __Pyx_PyObject_CallMethod0(__PYX_CONTEXT_FIRST_ARG_DEF PyObject* obj, PyObject* method_name); /*proto*/
 
 /////////////// PyObjectCallMethod0 ///////////////
 //@requires: PyObjectGetMethod
 //@requires: PyObjectCallOneArg
 //@requires: PyObjectCallNoArg
 
-static PyObject* __Pyx_PyObject_CallMethod0(PyObject* obj, PyObject* method_name) {
+static PyObject* __Pyx_PyObject_CallMethod0(__PYX_CONTEXT_FIRST_ARG_DEF PyObject* obj, PyObject* method_name) {
     PyObject *method = NULL, *result = NULL;
-    int is_method = __Pyx_PyObject_GetMethod(obj, method_name, &method);
+    int is_method = __Pyx_PyObject_GetMethod(__PYX_CONTEXT_CALL(,) obj, method_name, &method);
     if (likely(is_method)) {
-        result = __Pyx_PyObject_CallOneArg(method, obj);
+        result = __Pyx_PyObject_CallOneArg(__PYX_CONTEXT_CALL(,) method, obj);
         Py_DECREF(method);
         return result;
     }
     if (unlikely(!method)) goto bad;
-    result = __Pyx_PyObject_CallNoArg(method);
+    result = __Pyx_PyObject_CallNoArg(__PYX_CONTEXT_CALL(,) method);
     Py_DECREF(method);
 bad:
     return result;
@@ -2708,40 +2719,40 @@ done:
 
 /////////////// PyObjectCall2Args.proto ///////////////
 
-static CYTHON_INLINE PyObject* __Pyx_PyObject_Call2Args(PyObject* function, PyObject* arg1, PyObject* arg2); /*proto*/
+static CYTHON_INLINE PyObject* __Pyx_PyObject_Call2Args(__PYX_CONTEXT_FIRST_ARG_DEF PyObject* function, PyObject* arg1, PyObject* arg2); /*proto*/
 
 /////////////// PyObjectCall2Args ///////////////
 //@requires: PyObjectFastCall
 
-static CYTHON_INLINE PyObject* __Pyx_PyObject_Call2Args(PyObject* function, PyObject* arg1, PyObject* arg2) {
+static CYTHON_INLINE PyObject* __Pyx_PyObject_Call2Args(__PYX_CONTEXT_FIRST_ARG_DEF PyObject* function, PyObject* arg1, PyObject* arg2) {
     PyObject *args[3] = {NULL, arg1, arg2};
-    return __Pyx_PyObject_FastCall(function, args+1, 2 | __Pyx_PY_VECTORCALL_ARGUMENTS_OFFSET);
+    return __Pyx_PyObject_FastCall(__PYX_CONTEXT_CALL(,) function, args+1, 2 | __Pyx_PY_VECTORCALL_ARGUMENTS_OFFSET);
 }
 
 
 /////////////// PyObjectCallOneArg.proto ///////////////
 
-static CYTHON_INLINE PyObject* __Pyx_PyObject_CallOneArg(PyObject *func, PyObject *arg); /*proto*/
+static CYTHON_INLINE PyObject* __Pyx_PyObject_CallOneArg(__PYX_CONTEXT_FIRST_ARG_DEF PyObject *func, PyObject *arg); /*proto*/
 
 /////////////// PyObjectCallOneArg ///////////////
 //@requires: PyObjectFastCall
 
-static CYTHON_INLINE PyObject* __Pyx_PyObject_CallOneArg(PyObject *func, PyObject *arg) {
+static CYTHON_INLINE PyObject* __Pyx_PyObject_CallOneArg(__PYX_CONTEXT_FIRST_ARG_DEF PyObject *func, PyObject *arg) {
     PyObject *args[2] = {NULL, arg};
-    return __Pyx_PyObject_FastCall(func, args+1, 1 | __Pyx_PY_VECTORCALL_ARGUMENTS_OFFSET);
+    return __Pyx_PyObject_FastCall(__PYX_CONTEXT_CALL(,) func, args+1, 1 | __Pyx_PY_VECTORCALL_ARGUMENTS_OFFSET);
 }
 
 
 /////////////// PyObjectCallNoArg.proto ///////////////
 
-static CYTHON_INLINE PyObject* __Pyx_PyObject_CallNoArg(PyObject *func); /*proto*/
+static CYTHON_INLINE PyObject* __Pyx_PyObject_CallNoArg(__PYX_CONTEXT_FIRST_ARG_DEF PyObject *func); /*proto*/
 
 /////////////// PyObjectCallNoArg ///////////////
 //@requires: PyObjectFastCall
 
-static CYTHON_INLINE PyObject* __Pyx_PyObject_CallNoArg(PyObject *func) {
+static CYTHON_INLINE PyObject* __Pyx_PyObject_CallNoArg(__PYX_CONTEXT_FIRST_ARG_DEF PyObject *func) {
     PyObject *arg[2] = {NULL, NULL};
-    return __Pyx_PyObject_FastCall(func, arg + 1, 0 | __Pyx_PY_VECTORCALL_ARGUMENTS_OFFSET);
+    return __Pyx_PyObject_FastCall(__PYX_CONTEXT_CALL(,) func, arg + 1, 0 | __Pyx_PY_VECTORCALL_ARGUMENTS_OFFSET);
 }
 
 

@@ -2490,7 +2490,7 @@ class NameNode(AtomicExprNode):
             code.globalstate.use_utility_code(
                 UtilityCode.load_cached("GetBuiltinName", "ObjectHandling.c"))
             code.putln(
-                '%s = __Pyx_GetBuiltinName(%s); %s' % (
+                '%s = __Pyx_GetBuiltinName(__PYX_CONTEXT_CALL(,) %s); %s' % (
                 self.result(),
                 interned_cname,
                 code.error_goto_if_null(self.result(), self.pos)))
@@ -2863,14 +2863,14 @@ class ImportNode(ExprNode):
                 utility_code = UtilityCode.load_cached("ImportDottedModuleRelFirst", "ImportExport.c")
                 helper_func = "__Pyx_ImportDottedModuleRelFirst"
             code.globalstate.use_utility_code(utility_code)
-            import_code = "%s(%s, %s)" % (
+            import_code = "%s(__PYX_CONTEXT_CALL(,) %s, %s)" % (
                 helper_func,
                 self.module_name.py_result(),
                 self.module_names.py_result() if self.module_names else 'NULL',
             )
         else:
             code.globalstate.use_utility_code(UtilityCode.load_cached("Import", "ImportExport.c"))
-            import_code = "__Pyx_Import(%s, %s, %d)" % (
+            import_code = "__Pyx_Import(__PYX_CONTEXT_CALL(,) %s, %s, %d)" % (
                 self.module_name.py_result(),
                 self.name_list.py_result() if self.name_list else '0',
                 self.level)
@@ -3515,7 +3515,7 @@ class WithExitCallNode(ExprNode):
 
         if self.result_is_used:
             self.allocate_temp_result(code)
-            code.putln("%s = __Pyx_PyObject_IsTrue(%s);" % (self.result(), result_var))
+            code.putln("%s = __Pyx_PyObject_IsTrue(__PYX_CONTEXT_CALL(,) %s);" % (self.result(), result_var))
         code.put_decref_clear(result_var, type=py_object_type)
         if self.result_is_used:
             code.put_error_if_neg(self.pos, self.result())
@@ -3711,7 +3711,7 @@ class JoinedStrNode(ExprNode):
         code.mark_pos(self.pos)
         self.allocate_temp_result(code)
         code.globalstate.use_utility_code(UtilityCode.load_cached("JoinPyUnicode", "StringTools.c"))
-        code.putln('%s = __Pyx_PyUnicode_Join(%s, %d, %s, %s);' % (
+        code.putln('%s = __Pyx_PyUnicode_Join(__PYX_CONTEXT_CALL(,) %s, %d, %s, %s);' % (
             self.result(),
             values_array,
             num_items,
@@ -5612,6 +5612,7 @@ class SliceIndexNode(ExprNode):
 
             code.globalstate.use_utility_code(self.get_slice_utility_code)
             call = ("__Pyx_PyObject_GetSlice("
+                "__PYX_CONTEXT_CALL(,)"
                 f"{base_result}, {c_start}, {c_stop}, {py_start}, {py_stop}, {py_slice}, "
                 f"{has_c_start:d}, {has_c_stop:d}, {wraparound:d})"
             )
@@ -6500,7 +6501,7 @@ class SimpleCallNode(CallNode):
             code.globalstate.use_utility_code(UtilityCode.load_cached(
                 "PyObjectCallNoArg", "ObjectHandling.c"))
             code.putln(
-                "%s = __Pyx_PyObject_CallNoArg(%s); %s" % (
+                "%s = __Pyx_PyObject_CallNoArg(__PYX_CONTEXT_CALL(,) %s); %s" % (
                     self.result(),
                     function.py_result(),
                     code.error_goto_if_null(self.result(), self.pos)))
@@ -6508,7 +6509,7 @@ class SimpleCallNode(CallNode):
             code.globalstate.use_utility_code(UtilityCode.load_cached(
                 "PyObjectCallOneArg", "ObjectHandling.c"))
             code.putln(
-                "%s = __Pyx_PyObject_CallOneArg(%s, %s); %s" % (
+                "%s = __Pyx_PyObject_CallOneArg(__PYX_CONTEXT_CALL(,) %s, %s); %s" % (
                     self.result(),
                     function.py_result(),
                     arg.py_result(),
@@ -7512,7 +7513,7 @@ class MergedDictNode(ExprNode):
             code.putln('} else {')
             code.globalstate.use_utility_code(UtilityCode.load_cached(
                 "PyObjectCallOneArg", "ObjectHandling.c"))
-            code.putln("%s = __Pyx_PyObject_CallOneArg((PyObject*)&PyDict_Type, %s); %s" % (
+            code.putln("%s = __Pyx_PyObject_CallOneArg(__PYX_CONTEXT_CALL(,) (PyObject*)&PyDict_Type, %s); %s" % (
                 self.result(),
                 item.py_result(),
                 code.error_goto_if_null(self.result(), self.pos)))
@@ -7548,7 +7549,7 @@ class MergedDictNode(ExprNode):
                 if self.reject_duplicates:
                     # merge mapping into kwdict one by one as we need to check for duplicates
                     helpers.add("MergeKeywords")
-                    code.put_error_if_neg(item.pos, "__Pyx_MergeKeywords(%s, %s)" % (
+                    code.put_error_if_neg(item.pos, "__Pyx_MergeKeywords(__PYX_CONTEXT_CALL(,) %s, %s)" % (
                         self.result(), item.py_result()))
                 else:
                     # simple case, just add all entries
@@ -9934,7 +9935,7 @@ class Py3ClassNode(ExprNode):
         else:
             metaclass = "((PyObject*)&__Pyx_DefaultClassType)"
         code.putln(
-            '%s = __Pyx_Py3ClassCreate(%s, %s, %s, %s, %s, %d, %d); %s' % (
+            '%s = __Pyx_Py3ClassCreate(__PYX_CONTEXT_CALL(,) %s, %s, %s, %s, %s, %d, %d); %s' % (
                 self.result(),
                 metaclass,
                 cname,
@@ -9974,7 +9975,7 @@ class PyClassMetaclassNode(ExprNode):
         else:
             code.globalstate.use_utility_code(
                 UtilityCode.load_cached("CalculateMetaclass", "ObjectHandling.c"))
-            call = "__Pyx_CalculateMetaclass(NULL, %s)" % (
+            call = "__Pyx_CalculateMetaclass(__PYX_CONTEXT_CALL(,) NULL, %s)" % (
                 bases.result())
         code.putln(
             "%s = %s; %s" % (
@@ -10012,7 +10013,7 @@ class PyClassNamespaceNode(ExprNode, ModuleNameMixin):
         mkw = class_def_node.mkw.py_result() if class_def_node.mkw else null
         metaclass = class_def_node.metaclass.py_result() if class_def_node.metaclass else null
         code.putln(
-            "%s = __Pyx_Py3MetaclassPrepare(%s, %s, %s, %s, %s, %s, %s); %s" % (
+            "%s = __Pyx_Py3MetaclassPrepare(__PYX_CONTEXT_CALL(,) %s, %s, %s, %s, %s, %s, %s); %s" % (
                 self.result(),
                 metaclass,
                 class_def_node.bases.result(),
@@ -10365,7 +10366,7 @@ class PyCFunctionNode(ExprNode, ModuleNameMixin):
                 code.putln('__Pyx_CyFunction_SetDefaultsGetter(%s, %s);' % (
                     self.result(), def_node.defaults_getter.entry.pyfunc_cname))
             if self.annotations_dict:
-                code.putln('__Pyx_CyFunction_SetAnnotationsDict(%s, %s);' % (
+                code.putln('__Pyx_CyFunction_SetAnnotationsDict(__PYX_CONTEXT_CALL(,) %s, %s);' % (
                     self.result(), self.annotations_dict.py_result()))
 
 
@@ -13209,7 +13210,7 @@ class BoolBinopNode(ExprNode):
             test_result = code.funcstate.allocate_temp(
                 PyrexTypes.c_bint_type, manage_ref=False)
             code.putln(
-                "%s = __Pyx_PyObject_IsTrue(%s); %s" % (
+                "%s = __Pyx_PyObject_IsTrue(__PYX_CONTEXT_CALL(,) %s); %s" % (
                     test_result,
                     self.operand1.py_result(),
                     code.error_goto_if_neg(test_result, self.pos)))
@@ -13266,7 +13267,7 @@ class BoolBinopResultNode(ExprNode):
             test_result = code.funcstate.allocate_temp(
                 PyrexTypes.c_bint_type, manage_ref=False)
             code.putln(
-                "%s = __Pyx_PyObject_IsTrue(%s); %s" % (
+                "%s = __Pyx_PyObject_IsTrue(__PYX_CONTEXT_CALL(,) %s); %s" % (
                     test_result,
                     self.arg.py_result(),
                     code.error_goto_if_neg(test_result, self.pos)))
@@ -14176,7 +14177,7 @@ class CascadedCmpNode(Node, CmpNode):
 
     def generate_evaluation_code(self, code, result, operand1, needs_evaluation=False):
         if self.type.is_pyobject:
-            code.putln("if (__Pyx_PyObject_IsTrue(%s)) {" % result)
+            code.putln("if (__Pyx_PyObject_IsTrue(__PYX_CONTEXT_CALL(,) %s)) {" % result)
             code.put_decref(result, self.type)
         else:
             code.putln("if (%s) {" % result)
@@ -14710,7 +14711,7 @@ class CoerceToBooleanNode(CoercionNode):
                 "((!CYTHON_ASSUME_SAFE_MACROS) && %s < 0)" % self.result(), self.pos))
         else:
             code.putln(
-                "%s = __Pyx_PyObject_IsTrue(%s); %s" % (
+                "%s = __Pyx_PyObject_IsTrue(__PYX_CONTEXT_CALL(,) %s); %s" % (
                     self.result(),
                     self.arg.py_result(),
                     code.error_goto_if_neg(self.result(), self.pos)))

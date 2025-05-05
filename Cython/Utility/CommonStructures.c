@@ -1,16 +1,16 @@
 /////////////// FetchSharedCythonModule.proto ///////
 
-static PyObject *__Pyx_FetchSharedCythonABIModule(void);
+static PyObject *__Pyx_FetchSharedCythonABIModule(__PYX_CONTEXT_DEF_ONLY_ARG_DEF);
 
 /////////////// FetchSharedCythonModule ////////////
 
-static PyObject *__Pyx_FetchSharedCythonABIModule(void) {
-    return __Pyx_PyImport_AddModuleRef(__PYX_ABI_MODULE_NAME);
+static PyObject *__Pyx_FetchSharedCythonABIModule(__PYX_CONTEXT_DEF_ONLY_ARG_DEF) {
+    return __PYX_HPY_LEGACY_OBJECT_FROM(__Pyx_PyImport_AddModuleRef(__PYX_ABI_MODULE_NAME));
 }
 
 /////////////// FetchCommonType.proto ///////////////
 
-static PyTypeObject* __Pyx_FetchCommonTypeFromSpec(PyObject *module, PyType_Spec *spec, PyObject *bases);
+static PyTypeObject* __Pyx_FetchCommonTypeFromSpec(__PYX_CONTEXT_DEF_FIRST_ARG_DEF PyObject *module, PyType_Spec *spec, PyObject *bases);
 
 /////////////// FetchCommonType ///////////////
 //@requires:ExtensionTypes.c::FixUpExtensionType
@@ -50,7 +50,7 @@ static int __Pyx_VerifyCachedType(PyObject *cached_type,
     return 0;
 }
 
-static PyTypeObject *__Pyx_FetchCommonTypeFromSpec(PyObject *module, PyType_Spec *spec, PyObject *bases) {
+static PyTypeObject *__Pyx_FetchCommonTypeFromSpec(__PYX_CONTEXT_DEF_FIRST_ARG_DEF PyObject *module, PyType_Spec *spec, PyObject *bases) {
     PyObject *abi_module = NULL, *cached_type = NULL, *abi_module_dict, *new_cached_type, *py_object_name;
     int get_item_ref_result;
     // get the final part of the object name (after the last dot)
