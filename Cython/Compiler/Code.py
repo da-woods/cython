@@ -2953,38 +2953,52 @@ class CCodeWriter:
         from .PyrexTypes import py_object_type, typecast
         return typecast(py_object_type, type, cname)
 
+    def _handle_refnanny(self, type, nanny=True):
+        if type.supports_refnanny and nanny:
+            self.funcstate.needs_refnanny = True
+
     def put_gotref(self, cname, type):
+        self._handle_refnanny(type)
         type.generate_gotref(self, cname)
 
     def put_giveref(self, cname, type):
+        self._handle_refnanny(type)
         type.generate_giveref(self, cname)
 
     def put_xgiveref(self, cname, type):
+        self._handle_refnanny(type)
         type.generate_xgiveref(self, cname)
 
     def put_xgotref(self, cname, type):
+        self._handle_refnanny(type)
         type.generate_xgotref(self, cname)
 
-    def put_incref(self, cname, type, nanny=True):
+    def put_newref(self, cname, type, lhs_cname, nanny=True):
         # Note: original put_Memslice_Incref/Decref also added in some utility code
         # this is unnecessary since the relevant utility code is loaded anyway if a memoryview is used
         # and so has been removed. However, it's potentially a feature that might be useful here
-        type.generate_incref(self, cname, nanny=nanny)
+        self._handle_refnanny(type, nanny)
+        self.putln(type.generate_newref(cname, lhs_cname=lhs_cname, nanny=nanny))
 
-    def put_xincref(self, cname, type, nanny=True):
-        type.generate_xincref(self, cname, nanny=nanny)
+    def put_xnewref(self, cname, type, lhs_cname, nanny=True):
+        self._handle_refnanny(type, nanny)
+        self.putln(type.generate_newref(cname, lhs_cname, nanny=nanny))
 
     def put_decref(self, cname, type, nanny=True, have_gil=True):
+        self._handle_refnanny(type, nanny)
         type.generate_decref(self, cname, nanny=nanny, have_gil=have_gil)
 
     def put_xdecref(self, cname, type, nanny=True, have_gil=True):
+        self._handle_refnanny(type, nanny)
         type.generate_xdecref(self, cname, nanny=nanny, have_gil=have_gil)
 
     def put_decref_clear(self, cname, type, clear_before_decref=False, nanny=True, have_gil=True):
+        self._handle_refnanny(type, nanny)
         type.generate_decref_clear(self, cname, clear_before_decref=clear_before_decref,
                               nanny=nanny, have_gil=have_gil)
 
     def put_xdecref_clear(self, cname, type, clear_before_decref=False, nanny=True, have_gil=True):
+        self._handle_refnanny(type, nanny)
         type.generate_xdecref_clear(self, cname, clear_before_decref=clear_before_decref,
                               nanny=nanny, have_gil=have_gil)
 
@@ -2995,7 +3009,7 @@ class CCodeWriter:
         type.generate_xdecref_set(self, cname, rhs_cname)
 
     def put_incref_memoryviewslice(self, slice_cname, type, have_gil):
-        # TODO ideally this would just be merged into "put_incref"
+        # TODO ideally this would just be merged into "put_newref"
         type.generate_incref_memoryviewslice(self, slice_cname, have_gil=have_gil)
 
     def put_var_incref_memoryviewslice(self, entry, have_gil):
@@ -3013,11 +3027,13 @@ class CCodeWriter:
     def put_var_xgiveref(self, entry):
         self.put_xgiveref(entry.cname, entry.type)
 
-    def put_var_incref(self, entry, **kwds):
-        self.put_incref(entry.cname, entry.type, **kwds)
+    def put_var_newref(self, lhs_cname, rhs_entry, **kwds):
+        rhs = rhs_entry.type.generate_newref(rhs_entry.cname, **kwds)
+        self.
+        self.put_newref(entry.cname, entry.type, **kwds)
 
-    def put_var_xincref(self, entry, **kwds):
-        self.put_xincref(entry.cname, entry.type, **kwds)
+    def put_var_xnewref(self, lhs_cname, rhs_entry, **kwds):
+        self.put_xnewref(entry.cname, entry.type, **kwds)
 
     def put_var_decref(self, entry, **kwds):
         self.put_decref(entry.cname, entry.type, **kwds)

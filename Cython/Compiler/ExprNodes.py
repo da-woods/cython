@@ -853,6 +853,7 @@ class ExprNode(Node):
         If the result is in a temp, it is already a new reference.
         """
         if not self.result_in_temp():
+            # FIXME FIXME FIXME
             code.put_incref(self.result(), self.ctype())
 
     def make_owned_memoryviewslice(self, code):
@@ -6857,8 +6858,7 @@ class PyMethodCallNode(CallNode):
         # Returns the cname of the function variable, temp or name (for VectorcallMethod).
         if self.use_method_vectorcall:
             self.function_obj.generate_evaluation_code(code)
-            code.putln(f"{self_arg} = {self.function_obj.py_result()};")
-            code.put_incref(self_arg, py_object_type)
+            code.putln(f"{self_arg} = {py_object_type.generate_newref(self.function_obj.py_result())};")
             return code.get_py_string_const(self.function.attribute)
 
         code.putln(f"{self_arg} = NULL;")
@@ -6910,12 +6910,10 @@ class PyMethodCallNode(CallNode):
         # and is a separate decision to whether we want vectorcall-type behaviour.
         code.putln("#if CYTHON_UNPACK_METHODS")
         code.putln("if (%s(PyMethod_Check(%s))) {" % (likely_method, method_obj))
-        code.putln(f"{self_arg} = PyMethod_GET_SELF({method_obj});")
-        # The result of PyMethod_GET_SELF is always true in Py3.
-        code.putln(f"assert({self_arg});")
-        code.putln(f"PyObject* __pyx__function = PyMethod_GET_FUNCTION({method_obj});")
-        code.put_incref(self_arg, py_object_type)
-        code.put_incref("__pyx__function", py_object_type)
+        rhs_self = f"PyMethod_GET_SELF({method_obj})"
+        code.putln(f"{self_arg} = {py_object_type.generate_incref(rhs_self)};")
+        rhs_function = f"PyMethod_GET_FUNCTION({method_obj})"
+        code.putln(f"PyObject* __pyx__function = {py_object_type.generate_incref(rhs_function)};")
         # free method object as early to possible to enable reuse from CPython's freelist
         code.put_decref_set(method_obj, py_object_type, "__pyx__function")
         code.putln(f"{space_for_selfarg_var} = 0;")
@@ -8717,8 +8715,8 @@ class SequenceNode(ExprNode):
                 code.putln(code.error_goto_if_null(item.result(), self.pos))
                 code.put_xgotref(item.result(), item.ctype())
             else:  # Tuple
-                code.putln(f"{item.result()} = PyTuple_GET_ITEM(sequence, {i});")
-                code.put_incref(item.result(), item.ctype())
+                rhs_item = f"PyTuple_GET_ITEM(sequence, {i})"
+                code.putln(f"{item.result()} = item.ctype().generate_newref({rhs_item});")
         if len(sequence_types) == 2:
             code.putln("} else {")
             for i, item in enumerate(self.unpacked_items):
@@ -8727,8 +8725,8 @@ class SequenceNode(ExprNode):
                     code.putln(code.error_goto_if_null(item.result(), self.pos))
                     code.put_xgotref(item.result(), item.ctype())
                 else:  # Tuple
-                    code.putln(f"{item.result()} = PyTuple_GET_ITEM(sequence, {i});")
-                    code.put_incref(item.result(), item.ctype())
+                    rhs_item = f"PyTuple_GET_ITEM(sequence, {i})"
+                    code.putln(f"{item.result()} = {item.ctype().generate_newref()};")
             code.putln("}")
 
         code.putln("#else")
@@ -10197,13 +10195,12 @@ class ClassCellNode(ExprNode):
                 Naming.self_cname))
         else:
             code.putln('%s =  %s->classobj;' % (
-                self.result(), Naming.generator_cname))
+                py_object_type.generate_xincref(self.result()), Naming.generator_cname))
         code.putln(
             'if (!%s) { PyErr_SetString(PyExc_RuntimeError, '
             '"super(): empty __class__ cell"); %s }' % (
                 self.result(),
                 code.error_goto(self.pos)))
-        code.put_incref(self.result(), py_object_type)
 
 
 class PyCFunctionNode(ExprNode, ModuleNameMixin):
@@ -10940,8 +10937,8 @@ class YieldExprNode(ExprNode):
         self.generate_sent_value_handling_code(code, Naming.sent_value_cname)
         if self.result_is_used:
             self.allocate_temp_result(code)
-            code.put('%s = %s; ' % (self.result(), Naming.sent_value_cname))
-            code.put_incref(self.result(), py_object_type)
+            code.put('%s = %s; ' % (
+                self.result(), pyobject_type.generate_incref(Naming.sent_value_cname)))
 
     def generate_sent_value_handling_code(self, code, value_cname):
         code.putln(code.error_goto_if_null(value_cname, self.pos))
@@ -11680,11 +11677,9 @@ class TypecastNode(ExprNode):
 
     def generate_result_code(self, code):
         if self.is_temp:
+            rhs = f"(PyObject *){self.operand.result()}"
             code.putln(
-                "%s = (PyObject *)%s;" % (
-                    self.result(),
-                    self.operand.result()))
-            code.put_incref(self.result(), self.ctype())
+                f"{self.result()} = {self.ctype().generate_incref(rhs)};")
 
 
 ERR_START = "Start may not be given"
@@ -14973,14 +14968,14 @@ class CoerceToTempNode(CoercionNode):
     def generate_result_code(self, code):
         #self.arg.generate_evaluation_code(code) # Already done
         # by generic generate_subexpr_evaluation_code!
-        code.putln("%s = %s;" % (
-            self.result(), self.arg.result_as(self.ctype())))
+        rhs = self.arg.result_as(self.ctype())
         if self.use_managed_ref:
-            if not self.type.is_memoryviewslice:
-                code.put_incref(self.result(), self.ctype())
-            else:
-                code.put_incref_memoryviewslice(self.result(), self.type,
-                                            have_gil=not self.in_nogil_context)
+            rhs = self.ctype().generate_incref(rhs)
+        code.putln("%s = %s;" % (
+            self.result(), rhs))
+        if self.use_managed_ref and self.type.is_memoryviewslice:
+            code.put_incref_memoryviewslice(self.result(), self.type,
+                                        have_gil=not self.in_nogil_context)
 
 
 class ProxyNode(CoercionNode):
@@ -15101,6 +15096,7 @@ class CloneNode(CoercionNode):
         # if we're assigning from a CloneNode then it's "giveref"ed away, so it does
         # need a matching incref (ideally this should happen before the assignment though)
         if self.is_temp:  # should usually be true
+            # TODO - fixme fixme fixme
             code.put_incref(self.result(), self.ctype())
 
     def free_temps(self, code):
