@@ -3166,10 +3166,9 @@ class IteratorNode(ScopedExprNode):
                     self.sequence.py_result()))
 
         if is_builtin_sequence or self.may_be_a_sequence:
-            code.putln("%s = %s; __Pyx_INCREF(%s);" % (
+            code.putln("%s = __Pyx_NEWREF(%s);" % (
                 self.result(),
-                self.sequence.py_result(),
-                self.result(),
+                self.sequence.py_result()
             ))
             self.counter_cname = code.funcstate.allocate_temp(
                 PyrexTypes.c_py_ssize_t_type, manage_ref=False)
@@ -6911,9 +6910,9 @@ class PyMethodCallNode(CallNode):
         code.putln("#if CYTHON_UNPACK_METHODS")
         code.putln("if (%s(PyMethod_Check(%s))) {" % (likely_method, method_obj))
         rhs_self = f"PyMethod_GET_SELF({method_obj})"
-        code.putln(f"{self_arg} = {py_object_type.generate_incref(rhs_self)};")
+        code.putln(f"{self_arg} = {py_object_type.generate_newref(rhs_self)};")
         rhs_function = f"PyMethod_GET_FUNCTION({method_obj})"
-        code.putln(f"PyObject* __pyx__function = {py_object_type.generate_incref(rhs_function)};")
+        code.putln(f"PyObject* __pyx__function = {py_object_type.generate_newref(rhs_function)};")
         # free method object as early to possible to enable reuse from CPython's freelist
         code.put_decref_set(method_obj, py_object_type, "__pyx__function")
         code.putln(f"{space_for_selfarg_var} = 0;")

@@ -2959,24 +2959,21 @@ class CCodeWriter:
 
     def put_gotref(self, cname, type):
         self._handle_refnanny(type)
-        type.generate_gotref(self, cname)
+        self.putln(type.generate_gotref(cname))
 
     def put_giveref(self, cname, type):
         self._handle_refnanny(type)
-        type.generate_giveref(self, cname)
+        self.putln(type.generate_giveref(cname))
 
     def put_xgiveref(self, cname, type):
         self._handle_refnanny(type)
-        type.generate_xgiveref(self, cname)
+        self.putln(type.generate_xgiveref(cname))
 
     def put_xgotref(self, cname, type):
         self._handle_refnanny(type)
-        type.generate_xgotref(self, cname)
+        self.putln(type.generate_xgotref(cname))
 
     def put_newref(self, cname, type, lhs_cname, nanny=True):
-        # Note: original put_Memslice_Incref/Decref also added in some utility code
-        # this is unnecessary since the relevant utility code is loaded anyway if a memoryview is used
-        # and so has been removed. However, it's potentially a feature that might be useful here
         self._handle_refnanny(type, nanny)
         self.putln(type.generate_newref(cname, lhs_cname=lhs_cname, nanny=nanny))
 
@@ -2986,27 +2983,29 @@ class CCodeWriter:
 
     def put_decref(self, cname, type, nanny=True, have_gil=True):
         self._handle_refnanny(type, nanny)
-        type.generate_decref(self, cname, nanny=nanny, have_gil=have_gil)
+        self.putln(type.generate_decref(cname, nanny=nanny, have_gil=have_gil))
 
     def put_xdecref(self, cname, type, nanny=True, have_gil=True):
         self._handle_refnanny(type, nanny)
-        type.generate_xdecref(self, cname, nanny=nanny, have_gil=have_gil)
+        self.putln(type.generate_xdecref(cname, nanny=nanny, have_gil=have_gil))
 
     def put_decref_clear(self, cname, type, clear_before_decref=False, nanny=True, have_gil=True):
         self._handle_refnanny(type, nanny)
-        type.generate_decref_clear(self, cname, clear_before_decref=clear_before_decref,
-                              nanny=nanny, have_gil=have_gil)
+        self.putln(type.generate_decref_clear(cname, clear_before_decref=clear_before_decref,
+                              nanny=nanny, have_gil=have_gil))
 
     def put_xdecref_clear(self, cname, type, clear_before_decref=False, nanny=True, have_gil=True):
         self._handle_refnanny(type, nanny)
-        type.generate_xdecref_clear(self, cname, clear_before_decref=clear_before_decref,
-                              nanny=nanny, have_gil=have_gil)
+        self.putln(type.generate_xdecref_clear(cname, clear_before_decref=clear_before_decref,
+                              nanny=nanny, have_gil=have_gil))
 
     def put_decref_set(self, cname, type, rhs_cname):
-        type.generate_decref_set(self, cname, rhs_cname)
+        self._handle_refnanny(type, True)
+        self.putln(type.generate_decref_set(cname, rhs_cname))
 
     def put_xdecref_set(self, cname, type, rhs_cname):
-        type.generate_xdecref_set(self, cname, rhs_cname)
+        self._handle_refnanny(type, True)
+        self.putln(type.generate_xdecref_set(cname, rhs_cname))
 
     def put_incref_memoryviewslice(self, slice_cname, type, have_gil):
         # TODO ideally this would just be merged into "put_newref"
