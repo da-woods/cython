@@ -204,6 +204,7 @@ class PyrexType(BaseType):
     #  needs_refcounting     boolean     Needs code to be generated similar to incref/gotref/decref.
     #                                    Largely used internally.
     #  refcounting_needs_gil boolean     Reference counting needs GIL to be acquired.
+    #  supports_refnanny     boolean     Reference counting for can use refnanny
     #  equivalent_type       type        A C or Python type that is equivalent to this Python or C type.
     #  default_value         string      Initial value that can be assigned before first user assignment.
     #  declaration_value     string      The value statically assigned on declaration (if any).
@@ -277,7 +278,8 @@ class PyrexType(BaseType):
     is_unowned_view = False
     is_cython_lock_type = False
     has_attributes = 0
-    needs_refcounting = 0
+    needs_refcounting = False
+    supports_refnanny = False
     refcounting_needs_gil = True
     equivalent_type = None
     default_value = ""
@@ -382,14 +384,20 @@ class PyrexType(BaseType):
             raise NotImplementedError("Ref-counting operation not yet implemented for type %s" %
                                       self)
         return "%s = %s" % (cname, rhs_cname)
+    
+    def _generate_dummy_newref(self, cname, *ignored_args, **ignored_kwds):
+        if self.needs_refcounting:
+            raise NotImplementedError(
+                f"Ref-counting operation not yet implemented for type {self}")
+        return cname
 
     generate_decref = generate_xdecref \
         = generate_decref_clear = generate_xdecref_clear \
         = generate_gotref = generate_xgotref = generate_giveref = generate_xgiveref \
             = _generate_dummy_refcounting
 
-    generate_decref_set = generate_xdecref_set = generate_newref \
-        = generate_xnewref = _generate_dummy_refcounting_assignment
+    generate_decref_set = generate_xdecref_set = _generate_dummy_refcounting_assignment 
+    generate_newref = generate_xnewref = _generate_dummy_newref 
 
     def nullcheck_string(self, code, cname):
         if self.needs_refcounting:
@@ -1271,6 +1279,7 @@ class PyObjectType(PyrexType):
     is_gc_simple = False
     builtin_trashcan = False  # builtin type using trashcan
     needs_refcounting = True
+    supports_refnanny = True
 
     def __str__(self):
         return "Python object"
@@ -1330,17 +1339,17 @@ class PyObjectType(PyrexType):
     def check_for_null_code(self, cname):
         return cname
 
-    def generate_newref(self, lhs_cname, rhs_cname, nanny):
+    def generate_newref(self, cname, nanny):
         if nanny:
-            return f"{lhs_cname} = __Pyx_NEWREF({self.as_pyobject(rhs_cname)})"
+            return f"__Pyx_NEWREF({self.as_pyobject(cname)})"
         else:
-            return f"{lhs_cname} = Py_NEWREF({self.as_pyobject(rhs_cname)})"
+            return f"__Pyx_NewRef({self.as_pyobject(cname)})"
 
-    def generate_xnewref(self, lhs_cname, rhs_cname, nanny):
+    def generate_xnewref(self, cname, nanny):
         if nanny:
-            return f"{lhs_cname} = __Pyx_XNEWREF({self.as_pyobject(rhs_cname)})"
+            return f"__Pyx_XNEWREF({self.as_pyobject(cname)})"
         else:
-            return f"{lhs_cname} = Py_XNEWREF({self.as_pyobject(rhs_cname)})"
+            return f"__Pyx_NewRef({self.as_pyobject(cname)})"
 
     def generate_decref(self, cname, nanny, have_gil):
         # have_gil is for the benefit of memoryviewslice - it's ignored here

@@ -2953,58 +2953,58 @@ class CCodeWriter:
         from .PyrexTypes import py_object_type, typecast
         return typecast(py_object_type, type, cname)
 
-    def _handle_refnanny(self, type, nanny=True):
+    def handle_refnanny(self, type, nanny=True):
         if type.supports_refnanny and nanny:
             self.funcstate.needs_refnanny = True
 
     def put_gotref(self, cname, type):
-        self._handle_refnanny(type)
+        self.handle_refnanny(type)
         self.putln(type.generate_gotref(cname))
 
     def put_giveref(self, cname, type):
-        self._handle_refnanny(type)
+        self.handle_refnanny(type)
         self.putln(type.generate_giveref(cname))
 
     def put_xgiveref(self, cname, type):
-        self._handle_refnanny(type)
+        self.handle_refnanny(type)
         self.putln(type.generate_xgiveref(cname))
 
     def put_xgotref(self, cname, type):
-        self._handle_refnanny(type)
+        self.handle_refnanny(type)
         self.putln(type.generate_xgotref(cname))
 
-    def put_newref(self, cname, type, lhs_cname, nanny=True):
-        self._handle_refnanny(type, nanny)
-        self.putln(type.generate_newref(cname, lhs_cname=lhs_cname, nanny=nanny))
+    def put_newref_assignment(self, lhs_cname, type, rhs_cname, nanny=True):
+        self.handle_refnanny(type, nanny)
+        self.putln(f"{lhs_cname} = {type.generate_newref(rhs_cname, nanny=nanny)};")
 
-    def put_xnewref(self, cname, type, lhs_cname, nanny=True):
-        self._handle_refnanny(type, nanny)
-        self.putln(type.generate_newref(cname, lhs_cname, nanny=nanny))
+    def put_xnewref_assignment(self, lhs_cname, type, rhs_cname, nanny=True):
+        self.handle_refnanny(type, nanny)
+        self.putln(f"{lhs_cname} = {type.generate_xnewref(rhs_cname, nanny=nanny)};")
 
     def put_decref(self, cname, type, nanny=True, have_gil=True):
-        self._handle_refnanny(type, nanny)
+        self.handle_refnanny(type, nanny)
         self.putln(type.generate_decref(cname, nanny=nanny, have_gil=have_gil))
 
     def put_xdecref(self, cname, type, nanny=True, have_gil=True):
-        self._handle_refnanny(type, nanny)
+        self.handle_refnanny(type, nanny)
         self.putln(type.generate_xdecref(cname, nanny=nanny, have_gil=have_gil))
 
     def put_decref_clear(self, cname, type, clear_before_decref=False, nanny=True, have_gil=True):
-        self._handle_refnanny(type, nanny)
+        self.handle_refnanny(type, nanny)
         self.putln(type.generate_decref_clear(cname, clear_before_decref=clear_before_decref,
                               nanny=nanny, have_gil=have_gil))
 
     def put_xdecref_clear(self, cname, type, clear_before_decref=False, nanny=True, have_gil=True):
-        self._handle_refnanny(type, nanny)
+        self.handle_refnanny(type, nanny)
         self.putln(type.generate_xdecref_clear(cname, clear_before_decref=clear_before_decref,
                               nanny=nanny, have_gil=have_gil))
 
     def put_decref_set(self, cname, type, rhs_cname):
-        self._handle_refnanny(type, True)
+        self.handle_refnanny(type, True)
         self.putln(type.generate_decref_set(cname, rhs_cname))
 
     def put_xdecref_set(self, cname, type, rhs_cname):
-        self._handle_refnanny(type, True)
+        self.handle_refnanny(type, True)
         self.putln(type.generate_xdecref_set(cname, rhs_cname))
 
     def put_incref_memoryviewslice(self, slice_cname, type, have_gil):
@@ -3025,14 +3025,6 @@ class CCodeWriter:
 
     def put_var_xgiveref(self, entry):
         self.put_xgiveref(entry.cname, entry.type)
-
-    def put_var_newref(self, lhs_cname, rhs_entry, **kwds):
-        rhs = rhs_entry.type.generate_newref(rhs_entry.cname, **kwds)
-        self.
-        self.put_newref(entry.cname, entry.type, **kwds)
-
-    def put_var_xnewref(self, lhs_cname, rhs_entry, **kwds):
-        self.put_xnewref(entry.cname, entry.type, **kwds)
 
     def put_var_decref(self, entry, **kwds):
         self.put_decref(entry.cname, entry.type, **kwds)

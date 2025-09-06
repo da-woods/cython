@@ -1082,8 +1082,8 @@ class CArgDeclNode(Node):
         if target is None:
             target = self.calculate_default_value_code(code)
         default.generate_evaluation_code(code)
-        default.make_owned_reference(code)
-        result = default.result() if overloaded_assignment else default.result_as(self.type)
+        result = (default.result_owned_reference(code) if overloaded_assignment
+                  else default.result_as_owned_reference(self.type, code))
         code.putln("%s = %s;" % (target, result))
         code.put_giveref(default.result(), self.type)
         default.generate_post_assignment_code(code)
@@ -2185,10 +2185,10 @@ class FuncDefNode(StatNode, BlockNode):
                 code.name_in_module_state(Naming.empty_tuple)))
             code.putln("if (unlikely(!%s)) {" % Naming.cur_scope_cname)
             # Scope unconditionally DECREFed on return.
-            code.putln("%s = %s;" % (
+            code.put_newref_assignment(
                 Naming.cur_scope_cname,
-                lenv.scope_class.type.cast_code("Py_None")))
-            code.put_incref("Py_None", py_object_type)
+                py_object_type,
+                lenv.scope_class.type.cast_code("Py_None"))
             code.putln(code.error_goto(self.pos))
             code.putln("} else {")
             code.put_gotref(Naming.cur_scope_cname, lenv.scope_class.type)
@@ -3025,11 +3025,12 @@ class CFuncDefNode(FuncDefNode):
         # Move arguments into closure if required
         def put_into_closure(entry):
             if entry.in_closure and not arg.default:
-                code.putln('%s = %s;' % (entry.cname, entry.original_cname))
+                rhs = entry.original_cname
                 if entry.type.is_memoryviewslice:
-                    entry.type.generate_incref_memoryviewslice(code, entry.cname, True)
+                    code.putln('%s = %s;' % (entry.cname, rhs))
+                    code.putln(entry.type.generate_incref_memoryviewslice(entry.cname, True))
                 else:
-                    code.put_var_incref(entry)
+                    code.put_newref_assignment(entry.cname, entry.type, rhs)
                     code.put_var_giveref(entry)
         for arg in self.args:
             put_into_closure(scope.lookup_here(arg.name))
@@ -4180,9 +4181,11 @@ class DefNodeWrapper(FuncDefNode):
         elif self.star_arg:
             assert not self.signature.use_fastcall
             star_arg_cname = self.star_arg.entry.cname
-            code.put_incref(Naming.args_cname, py_object_type)
-            code.putln(
-                f"{star_arg_cname} = {Naming.args_cname};")
+            code.put_newref_assignment(
+                star_arg_cname,
+                py_object_type,
+                Naming.args_cname
+            )
             self.star_arg.entry.xdecref_cleanup = 0
 
     def generate_tuple_and_keyword_parsing_code(self, args, code, decl_code):
@@ -4461,8 +4464,11 @@ class DefNodeWrapper(FuncDefNode):
                 # If there are no positional arguments, use the args tuple
                 # directly
                 assert not self.signature.use_fastcall
-                code.put_incref(Naming.args_cname, py_object_type)
-                code.putln("%s = %s;" % (self.star_arg.entry.cname, Naming.args_cname))
+                code.put_newref_assignment(
+                    self.star_arg.entry.cname,
+                    py_object_type,
+                    Naming.args_cname
+                )
             else:
                 # It is possible that this is a slice of "negative" length,
                 # as in args[5:3]. That's not a problem, the function below
@@ -4739,9 +4745,11 @@ class GeneratorDefNode(DefNode):
         code.put_decref(Naming.cur_scope_cname, py_object_type)
         if self.requires_classobj:
             classobj_cname = 'gen->classobj'
-            code.putln('%s = __Pyx_CyFunction_GetClassObj(%s);' % (
-                classobj_cname, Naming.self_cname))
-            code.put_incref(classobj_cname, py_object_type)
+            code.put_newref_assignment(
+                classobj_cname,
+                py_object_type,
+                f"__Pyx_CyFunction_GetClassObj({self.cname})"
+            )
             code.put_giveref(classobj_cname, py_object_type)
         code.put_finish_refcount_context()
         code.putln('return (PyObject *) gen;')
@@ -5827,9 +5835,11 @@ class CClassDefNode(ClassDefNode):
 
             code.putln("#else")
             if bases_tuple_cname:
-                code.put_incref(bases_tuple_cname, py_object_type)
+                code.put_newref_assignment(
+                    f"{type.typeobj_cname}.tp_bases",
+                    py_object_type,
+                    bases_tuple_cname)
                 code.put_giveref(bases_tuple_cname, py_object_type)
-                code.putln("%s.tp_bases = %s;" % (type.typeobj_cname, bases_tuple_cname))
             code.putln("%s = &%s;" % (
                 typeptr_cname,
                 type.typeobj_cname,
@@ -7011,10 +7021,9 @@ class ReturnStatNode(StatNode):
                     have_gil=self.in_nogil_context)
                 value.generate_post_assignment_code(code)
             else:
-                value.make_owned_reference(code)
                 code.putln("%s = %s;" % (
                     Naming.retval_cname,
-                    value.result_as(self.return_type)))
+                    value.result_as_owned_reference(self.return_type, code)))
                 value.generate_post_assignment_code(code)
                 if code.globalstate.directives['profile'] or code.globalstate.directives['linetrace']:
                     code.put_trace_return(
@@ -8108,8 +8117,7 @@ class WithStatNode(StatNode):
             # The temp result will be cleaned up by the WithTargetAssignmentStatNode
             # after assigning its result to the target of the 'with' statement.
             self.target_temp.allocate(code)
-            self.enter_call.make_owned_reference(code)
-            code.putln("%s = %s;" % (self.target_temp.result(), self.enter_call.result()))
+            code.putln("%s = %s;" % (self.target_temp.result(), self.enter_call.result_owned_reference(code)))
             self.enter_call.generate_post_assignment_code(code)
         else:
             self.enter_call.generate_disposal_code(code)

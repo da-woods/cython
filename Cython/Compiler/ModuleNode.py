@@ -3567,10 +3567,7 @@ class ModuleNode(Nodes.Node, Nodes.BlockNode):
         # manage_ref is False (and refnanny calls are omitted) because refnanny isn't yet initialized.
         module_temp = code.funcstate.allocate_temp(py_object_type, manage_ref=False)
         code.putln("#if CYTHON_PEP489_MULTI_PHASE_INIT")
-        code.putln("%s = %s;" % (
-            module_temp,
-            Naming.pymodinit_module_arg))
-        code.put_incref(module_temp, py_object_type, nanny=False)
+        code.put_newref_assignment(module_temp, py_object_type, Naming.pymodinit_module_arg, nanny=False)
         code.putln("#else")
         code.putln(
             "%s = PyModule_Create(&%s); %s" % (
@@ -3609,11 +3606,13 @@ class ModuleNode(Nodes.Node, Nodes.BlockNode):
         code.putln("CYTHON_UNUSED_VAR(%s);" % module_temp)  # only used in limited API
 
         dict_cname = code.name_in_main_c_code_module_state(env.module_dict_cname)
-        code.putln(
-            "%s = PyModule_GetDict(%s); %s" % (
-                dict_cname, env.module_cname,
-                code.error_goto_if_null(dict_cname, self.pos)))
-        code.put_incref(dict_cname, py_object_type, nanny=False)
+        code.put_xnewref_assignment(
+            dict_cname,
+            py_object_type,
+            f"PyModule_GetDict({env.module_cname})",
+            nanny=False
+        )
+        code.putln(code.error_goto_if_null(dict_cname, self.pos))
 
         builtins_cname = code.name_in_main_c_code_module_state(Naming.builtins_cname)
         code.putln(

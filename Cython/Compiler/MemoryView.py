@@ -106,7 +106,7 @@ def put_assign_to_memviewslice(lhs_cname, rhs, rhs_cname, memviewslicetype, code
                          have_gil=have_gil)
 
     if not rhs.result_in_temp():
-        rhs.make_owned_memoryviewslice(code)
+        rhs_cname = memviewslicetype.generate_memoryview_newref(rhs_cname)
 
     code.putln("%s = %s;" % (lhs_cname, rhs_cname))
 
