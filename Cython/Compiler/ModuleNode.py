@@ -213,7 +213,6 @@ def _generate_export_code(code: Code.CCodeWriter, pos, exports, names, signature
 
     pointer_cast = pointer_decl.format(name='')
     sig_bytes = '\0'.join(signatures).encode('utf-8')
-    names_bytes = '\0'.join(names).encode('utf-8')
     pointers = [f"({pointer_cast})&{export}" for export in exports]
 
     code.putln("{")
@@ -227,13 +226,13 @@ def _generate_export_code(code: Code.CCodeWriter, pos, exports, names, signature
     )
     code.put_gotref(api_dict, py_object_type)
 
-    sigs_and_names_bytes = bytes_literal(sig_bytes + b'\0' + names_bytes, 'utf-8')
-    code.putln(f"const char * __pyx_exported_signature = __Pyx_PyBytes_AsString({code.get_py_string_const(sigs_and_names_bytes)});")
+    sigs_bytes = bytes_literal(sig_bytes, 'utf-8')
+    code.putln(f"const char * __pyx_exported_signature = __Pyx_PyBytes_AsString({code.get_py_string_const(sigs_bytes)});")
     code.putln("#if !CYTHON_ASSUME_SAFE_MACROS")
     code.putln(code.error_goto_if_null('__pyx_exported_signature', pos))
     code.putln("#endif")
-    code.putln(f"const char * __pyx_exported_name = __pyx_exported_signature + {len(sig_bytes) + 1};")
     code.putln(f"{pointer_decl.format(name='const __pyx_exported_pointers[]')} = {{{', '.join(pointers)}, ({pointer_cast}) NULL}};")
+    code.putln(f"PyObject * __pyx_all_names[] = {{{', '.join(code.get_py_string_const(n) for n in names)}}};")
 
     code.globalstate.use_utility_code(
         UtilityCode.load_cached(utility_code_name, "ImportExport.c"))
@@ -242,14 +241,15 @@ def _generate_export_code(code: Code.CCodeWriter, pos, exports, names, signature
 
     code.putln(f"{pointer_decl.format(name='const *__pyx_exported_pointer')} = __pyx_exported_pointers;")
     code.putln("const char *__pyx_current_signature = __pyx_exported_signature;")
+    code.putln("PyObject **__pyx_current_name = __pyx_all_names;")
     code.putln("while (*__pyx_exported_pointer) {")
 
     code.put_error_if_neg(
         pos,
-        f"{export_func}({api_dict}, __pyx_exported_name, *__pyx_exported_pointer, __pyx_current_signature)"
+        f"{export_func}({api_dict}, *__pyx_current_name, *__pyx_exported_pointer, __pyx_current_signature)"
     )
     code.putln("++__pyx_exported_pointer;")
-    code.putln("__pyx_exported_name = strchr(__pyx_exported_name, '\\0') + 1;")
+    code.putln("++__pyx_current_name;")
     code.putln("__pyx_exported_signature = strchr(__pyx_exported_signature, '\\0') + 1;")
     # Keep reusing the current signature until we find a new non-empty one.
     code.putln("if (*__pyx_exported_signature != '\\0') __pyx_current_signature = __pyx_exported_signature;")
