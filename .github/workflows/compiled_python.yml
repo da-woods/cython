@@ -1,0 +1,104 @@
+name: Run with compiled Python
+
+on:
+  workflow_call:
+    inputs:
+      sanitize:
+        required: false
+        default:
+        type: string
+      compiler:
+        required: false
+        default:
+        type: string
+      cpp_compiler:
+        required: false
+        default:
+        type: string
+      name:
+        required: true
+        type: string
+
+jobs:
+  do_run:
+    name: ${{inputs.name}}
+    runs-on: ubuntu-latest
+
+    env:
+      BACKEND: c,cpp
+      PYTHON_VERSION: 3.x-dev
+      CONFIGURE_ARGS: --with-pydebug
+      SANITIZER_CFLAGS: ""
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v5
+
+      - name: Set compiler
+        if: ${{inputs.compiler}}
+        run: |
+          echo CC=${{inputs.compiler}} >> $GITHUB_ENV
+          echo CXX=${{inputs.cpp_compiler}} >> $GITHUB_ENV
+          echo EXTERNAL_OVERRIDE_CC=1 >> $GITHUB_ENV
+
+      - name: Set up sanitizer args
+        if: ${{inputs.sanitize}}
+        run: |
+          SANITIZER_CFLAGS=""
+          CONFIGURE_ARGS=""
+          if [[ "${{inputs.sanitize}}" == *"address"* ]]; then
+            CONFIGURE_ARGS="$CONFIGURE_ARGS --with-address-sanitizer --without-pymalloc"
+            SANITIZER_CFLAGS="$SANITIZER_CFLAGS -fsanitize=address"
+            echo "ASAN_OPTIONS=detect_leaks=false" >> $GITHUB_ENV
+          fi
+          # TODO - memory sanitizer requires rebuilding almost all of CPython's dependencies
+          # with memory sanitizer too, so isn't really usable for us.
+          if [[ "${{inputs.sanitize}}" == *"memory"* ]]; then
+            CONFIGURE_ARGS="$CONFIGURE_ARGS --with-memory-sanitizer"
+            SANITIZER_CFLAGS="$SANITIZER_CFLAGS -fsanitize=memory"
+          fi
+          if [[ "${{inputs.sanitize}}" == *"undefined"* ]]; then
+            CONFIGURE_ARGS="$CONFIGURE_ARGS --with-undefined-behavior-sanitizer"
+            # We call functions through slightly wrong pointer types a lot so disable for now
+            # omit vptr because it's largely C++-only and requires linking with clang++ (which breaks other things)
+            SANITIZER_CFLAGS="$SANITIZER_CFLAGS -fsanitize=undefined -fno-sanitize=function -fno-sanitize=vptr -fno-omit-frame-pointer"
+            #echo "UBSAN_OPTIONS=halt_on_error=1 print_stacktrace=1" >> $GITHUB_ENV
+          fi
+          if [[ "${{inputs.sanitize}}" == *"thread"* ]]; then
+            CONFIGURE_ARGS="$CONFIGURE_ARGS --with-thread-sanitizer"
+            SANITIZER_CFLAGS="$SANITIZER_CFLAGS -fsanitize=thread"
+            if [[ "${{inputs.sanitize}}" == *"ft"* ]]; then
+              CONFIGURE_ARGS="$CONFIGURE_ARGS --disable-gil"
+              echo "TSAN_OPTIONS=halt_on_error=1 suppressions=${GITHUB_WORKSPACE}/cpython_main/Tools/tsan/suppressions_free_threading.txt"
+            else
+              echo "TSAN_OPTIONS=halt_on_error=1 suppressions=${GITHUB_WORKSPACE}/cpython_main/Tools/tsan/suppressions.txt"
+            fi
+            EXCLUDE="--excludefile tests/tsan_bugs.txt"
+          fi
+          # Even running Python like this is slow, so only run a subset of tests
+          # (i.e. compile-only tests tell us nothing)
+          echo "EXCLUDE=$EXCLUDE run[.] memoryview[.] --no-examples --no-refnanny" >> $GITHUB_ENV
+          # https://github.com/google/sanitizers/issues/934
+          echo "LD_PRELOAD=$(realpath "$(clang -print-file-name=libstdc++.so)")"
+          echo "CONFIGURE_ARGS=$CONFIGURE_ARGS" >> $GITHUB_ENV
+          echo "SANITIZER_CFLAGS=$SANITIZER_CFLAGS" >> $GITHUB_ENV
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update -y -q
+          sudo apt-get install -y -q libbz2-dev lzma-dev libreadline-dev libgmp-dev
+
+      - name: Build Python
+        run: |
+          git clone https://github.com/python/cpython/ cpython_main
+          cd cpython_main
+          ./configure ${CONFIGURE_ARGS} --prefix=${GITHUB_WORKSPACE}/cpython_install CFLAGS="-O2"
+          make -j8
+          make install
+          ${GITHUB_WORKSPACE}/cpython_install/bin/python3 -m venv ${GITHUB_WORKSPACE}/venv_pydebug
+
+      - name: Run CI
+        run: |
+          cd "${GITHUB_WORKSPACE}/"
+          source venv_pydebug/bin/activate
+          bash ./Tools/ci-run.sh
