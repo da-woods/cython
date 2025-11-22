@@ -718,74 +718,24 @@ static int __Pyx_call_type_traverse(PyObject *o, int always_call, visitproc visi
 static PyObject *__Pyx_GetTypeDict(PyTypeObject *tp); /* proto */
 #endif
 
-////////////////// LimitedApiGetTypeDict //////////////////////
-
-#if CYTHON_COMPILING_IN_LIMITED_API
-static Py_ssize_t __Pyx_GetTypeDictOffset(void) {
-    PyObject *tp_dictoffset_o;
-    Py_ssize_t tp_dictoffset;
-    tp_dictoffset_o = PyObject_GetAttrString((PyObject*)(&PyType_Type), "__dictoffset__");
-    if (unlikely(!tp_dictoffset_o)) return -1;
-    tp_dictoffset = PyLong_AsSsize_t(tp_dictoffset_o);
-    Py_DECREF(tp_dictoffset_o);
-
-    if (unlikely(tp_dictoffset == 0)) {
-        PyErr_SetString(
-            PyExc_TypeError,
-            "'type' doesn't have a dictoffset");
-        return -1;
-    } else if (unlikely(tp_dictoffset < 0)) {
-        // This isn't completely future proof. dictoffset can be
-        // negative, but isn't in Python <=3.13 (current at time
-        // of writing).  It's awkward to calculate in the limited
-        // API because we need to know the object size.  For now
-        // just raise an error and fix it if it every changes.
-        PyErr_SetString(
-            PyExc_TypeError,
-            "'type' has an unexpected negative dictoffset. "
-            "Please report this as Cython bug");
-        return -1;
-    }
-
-    return tp_dictoffset;
-}
-
-static PyObject *__Pyx_GetTypeDict(PyTypeObject *tp) {
-    // TODO - if we ever support custom metatypes for extension types then
-    // we have to modify this caching.
-    static Py_ssize_t tp_dictoffset = 0;
-    if (unlikely(tp_dictoffset == 0)) {
-        tp_dictoffset = __Pyx_GetTypeDictOffset();
-        // Note that negative dictoffsets are definitely allowed.
-        // A dictoffset of -1 seems unlikely but isn't obviously forbidden.
-        if (unlikely(tp_dictoffset == -1 && PyErr_Occurred())) {
-            tp_dictoffset = 0; // try again next time?
-            return NULL;
-        }
-    }
-    return *(PyObject**)((char*)tp + tp_dictoffset);
-}
-#endif
-
 
 ////////////////// SetItemOnTypeDict.proto //////////////////////////
-//@requires: LimitedApiGetTypeDict
 
+#if CYTHON_USE_TYPE_SPECS
+// In heap-types world, cdef classes are mutable
+#define __Pyx_SetItemOnTypeDict(tp, k, v) PyObject_SetItem((PyObject*)tp, k, v)
+#else
 static int __Pyx__SetItemOnTypeDict(PyTypeObject *tp, PyObject *k, PyObject *v); /* proto */
 
 #define __Pyx_SetItemOnTypeDict(tp, k, v) __Pyx__SetItemOnTypeDict((PyTypeObject*)tp, k, v)
+#endif
 
 ////////////////// SetItemOnTypeDict //////////////////////////
 
+#if !CYTHON_USE_TYPE_SPECS
 static int __Pyx__SetItemOnTypeDict(PyTypeObject *tp, PyObject *k, PyObject *v) {
     int result;
-    PyObject *tp_dict;
-#if CYTHON_COMPILING_IN_LIMITED_API
-    tp_dict = __Pyx_GetTypeDict(tp);
-    if (unlikely(!tp_dict)) return -1;
-#else
-    tp_dict = tp->tp_dict;
-#endif
+    PyObject *tp_dict = tp->tp_dict;
     result = PyDict_SetItem(tp_dict, k, v);
     if (likely(!result)) {
         PyType_Modified(tp);
@@ -797,29 +747,32 @@ static int __Pyx__SetItemOnTypeDict(PyTypeObject *tp, PyObject *k, PyObject *v) 
     }
     return result;
 }
+#endif
 
 ////////////////// DelItemOnTypeDict.proto //////////////////////////
 
+#if CYTHON_USE_TYPE_SPECS && __PYX_LIMITED_VERSION_HEX >= 0x030d0000
+// In heap-types world, cdef classes are mutable
+#define __Pyx_DelItemOnTypeDict(tp, k) PyObject_DelAttr((PyObject*)tp, k)
+#elif CYTHON_USE_TYPE_SPECS
+#define __Pyx_DelItemOnTypeDict(tp, k) PyObject_SetAttr((PyObject*)tp, k, NULL)
+#else
 static int __Pyx__DelItemOnTypeDict(PyTypeObject *tp, PyObject *k); /* proto */
 
 #define __Pyx_DelItemOnTypeDict(tp, k) __Pyx__DelItemOnTypeDict((PyTypeObject*)tp, k)
+#endif
 
 ////////////////// DelItemOnTypeDict //////////////////////////
-//@requires: LimitedApiGetTypeDict
 
+#if !CYTHON_USE_TYPE_SPECS
 static int __Pyx__DelItemOnTypeDict(PyTypeObject *tp, PyObject *k) {
     int result;
-    PyObject *tp_dict;
-#if CYTHON_COMPILING_IN_LIMITED_API
-    tp_dict = __Pyx_GetTypeDict(tp);
-    if (unlikely(!tp_dict)) return -1;
-#else
-    tp_dict = tp->tp_dict;
-#endif
+    PyObject *tp_dict = tp->tp_dict;
     result = PyDict_DelItem(tp_dict, k);
     if (likely(!result)) PyType_Modified(tp);
     return result;
 }
+#endif
 
 ////////////////// AllocateExtensionType.proto ///////////////////////
 
