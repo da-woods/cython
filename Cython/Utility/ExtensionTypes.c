@@ -723,7 +723,7 @@ static PyObject *__Pyx_GetTypeDict(PyTypeObject *tp); /* proto */
 
 #if CYTHON_USE_TYPE_SPECS
 // In heap-types world, cdef classes are mutable
-#define __Pyx_SetItemOnTypeDict(tp, k, v) PyObject_SetItem((PyObject*)tp, k, v)
+#define __Pyx_SetItemOnTypeDict(tp, k, v) PyObject_SetAttr((PyObject*)tp, k, v)
 #else
 static int __Pyx__SetItemOnTypeDict(PyTypeObject *tp, PyObject *k, PyObject *v); /* proto */
 
