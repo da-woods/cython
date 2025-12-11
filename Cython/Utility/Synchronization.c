@@ -6,6 +6,7 @@
 #ifndef CYTHON_ATOMICS
     #define CYTHON_ATOMICS 1
 #endif
+#define __PYX_DEBUG_ATOMICS
 // using CYTHON_ATOMICS as a cdef extern bint in the Cython memoryview code
 // interacts badly with "import *". Therefore, define a helper function-like macro
 #define __PYX_CYTHON_ATOMICS_ENABLED() CYTHON_ATOMICS
@@ -49,7 +50,7 @@
     #if defined(__PYX_DEBUG_ATOMICS) && defined(_MSC_VER)
         #pragma message ("Using standard C atomics")
     #elif defined(__PYX_DEBUG_ATOMICS)
-        #warning "Using standard C atomics"
+        #error "Using standard C atomics"
     #endif
 #elif CYTHON_ATOMICS && (defined(__cplusplus) && ( \
                     (__cplusplus >= 201103L) || \
@@ -76,7 +77,7 @@
     #if defined(__PYX_DEBUG_ATOMICS) && defined(_MSC_VER)
         #pragma message ("Using standard C++ atomics")
     #elif defined(__PYX_DEBUG_ATOMICS)
-        #warning "Using standard C++ atomics"
+        #error "Using standard C++ atomics"
     #endif
 #elif CYTHON_ATOMICS && (__GNUC__ >= 5 || (__GNUC__ == 4 && \
                     (__GNUC_MINOR__ > 1 ||  \
@@ -108,7 +109,7 @@
     }
 
     #ifdef __PYX_DEBUG_ATOMICS
-        #warning "Using GNU atomics"
+        #error "Using GNU atomics"
     #endif
 #elif CYTHON_ATOMICS && defined(_MSC_VER)
     /* msvc */
@@ -154,7 +155,7 @@
     #define CYTHON_ATOMICS 0
 
     #ifdef __PYX_DEBUG_ATOMICS
-        #warning "Not using atomics"
+        #error "Not using atomics"
     #endif
 #endif
 
