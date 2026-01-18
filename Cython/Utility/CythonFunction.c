@@ -46,7 +46,7 @@ if (likely(__pyx_CyFunction_init($module_cname) == 0)); else
     __Pyx__CyFunction_SetClassObj(__Pyx_as_CyFunctionObject(f), (classobj))
 
 #define __Pyx_CyFunction_Defaults(type, typeoffset, f) \
-    __Pyx_GetCClassTypeDataAndCast( \
+    __Pyx_GetCClassTypeData( \
         __PYX_C_CLASS_DECL(type*)(__Pyx_GetSharedTypeData(f, CGLOBAL(__pyx_CyFunctionType), __pyx_CyFunctionObject *))->defaults, \
         typeoffset, \
         type*)
