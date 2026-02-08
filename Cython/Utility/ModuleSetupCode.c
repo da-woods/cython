@@ -2030,26 +2030,34 @@ static CYTHON_INLINE int __Pyx_Is_Little_Endian(void)
   #define __Pyx_RefNannyFinishContext() \
           __Pyx_RefNanny->FinishContext(&__pyx_refnanny)
   #define __Pyx_INCREF(r)  __Pyx_RefNanny->INCREF(__pyx_refnanny, (PyObject *)(r), (__LINE__))
+  #define __Pyx_NEWREF(r) __Pyx__NEWREF(__pyx_refnanny, (PyObject *)(r), (__LINE__))
   #define __Pyx_DECREF(r)  __Pyx_RefNanny->DECREF(__pyx_refnanny, (PyObject *)(r), (__LINE__))
   #define __Pyx_GOTREF(r)  __Pyx_RefNanny->GOTREF(__pyx_refnanny, (PyObject *)(r), (__LINE__))
   #define __Pyx_GIVEREF(r) __Pyx_RefNanny->GIVEREF(__pyx_refnanny, (PyObject *)(r), (__LINE__))
   #define __Pyx_XINCREF(r)  do { if((r) == NULL); else {__Pyx_INCREF(r); }} while(0)
+  #define __Pyx_XNEWREF(r) (((r) == NULL) ? NULL : __Pyx_NEWREF(r))
   #define __Pyx_XDECREF(r)  do { if((r) == NULL); else {__Pyx_DECREF(r); }} while(0)
   #define __Pyx_XGOTREF(r)  do { if((r) == NULL); else {__Pyx_GOTREF(r); }} while(0)
-  #define __Pyx_XGIVEREF(r) do { if((r) == NULL); else {__Pyx_GIVEREF(r);}} while(0)
+  #define __Pyx_XGIVEREF(r) ((r) ? __Pyx_GIVEREF((r)) : NULL)
+  static CYTHON_INLINE __Pyx__NEWREF(__Pyx_RefNannyAPIStruct* refnanny, PyObject *r, Py_ssize_t line) {
+      refnanny->INCREF(refnanny, r, line);
+      return r;
+  }
 #else
   #define __Pyx_RefNannyDeclarations
   #define __Pyx_RefNannySetupContext(name, acquire_gil)
   #define __Pyx_RefNannyFinishContextNogil()
   #define __Pyx_RefNannyFinishContext()
   #define __Pyx_INCREF(r) Py_INCREF(r)
+  #define __Pyx_NEWREF(r) __Pyx_NewRef(r)
   #define __Pyx_DECREF(r) Py_DECREF(r)
   #define __Pyx_GOTREF(r)
-  #define __Pyx_GIVEREF(r)
+  #define __Pyx_GIVEREF(r) r
   #define __Pyx_XINCREF(r) Py_XINCREF(r)
+  #define __Pyx_XNEWREF(r) __Pyx_XNewRef(r)
   #define __Pyx_XDECREF(r) Py_XDECREF(r)
   #define __Pyx_XGOTREF(r)
-  #define __Pyx_XGIVEREF(r)
+  #define __Pyx_XGIVEREF(r) r
 #endif /* CYTHON_REFNANNY */
 
 #define __Pyx_Py_XDECREF_SET(r, v) do {                         \
@@ -2063,6 +2071,14 @@ static CYTHON_INLINE int __Pyx_Is_Little_Endian(void)
 #define __Pyx_DECREF_SET(r, v) do {                             \
         PyObject *tmp = (PyObject *) r;                         \
         r = v; __Pyx_DECREF(tmp);                               \
+    } while (0)
+#define __Pyx_XGOTREF_XDECREF_SET(r, v) do {                    \
+        PyObject *tmp = (PyObject *) r;                         \
+        r = v; (void)__Pyx_XGOTREF(tmp); __Pyx_XDECREF(tmp);          \
+    } while (0)
+#define __Pyx_GOTREF_DECREF_SET(r, v) do {                      \
+        PyObject *tmp = (PyObject *) r;                         \
+        r = v; __Pyx_GOTREF(tmp); __Pyx_DECREF(tmp);            \
     } while (0)
 
 #define __Pyx_CLEAR(r)    do { PyObject* tmp = ((PyObject*)(r)); r = NULL; __Pyx_DECREF(tmp);} while(0)

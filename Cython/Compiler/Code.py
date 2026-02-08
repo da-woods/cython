@@ -2665,6 +2665,8 @@ class CCodeWriter:
         return self.buffer.getvalue()
 
     def write(self, s):
+        if "__Pyx_DECREF_SET(__pyx_v_s, __Pyx_NEWREF(__pyx_v_original_scanner))" in s:
+            breakpoint()
         if '\n' in s:
             self._write_lines(s)
         else:
@@ -3123,11 +3125,11 @@ class CCodeWriter:
 
     def put_giveref(self, cname, type):
         self.handle_refnanny(type)
-        self.putln(type.get_giveref_code(cname))
+        self.putln(f"(void){type.get_giveref_code(cname)};")
 
     def put_xgiveref(self, cname, type):
         self.handle_refnanny(type)
-        self.putln(type.get_xgiveref_code(cname))
+        self.putln(f"(void){type.get_xgiveref_code(cname)};")
 
     def put_xgotref(self, cname, type):
         self.handle_refnanny(type)
@@ -3168,13 +3170,13 @@ class CCodeWriter:
         self.putln(type.get_xdecref_clear_code(
             cname, clear_before_decref=clear_before_decref, nanny=nanny, have_gil=have_gil))
 
-    def put_decref_set(self, cname, type, rhs_cname):
+    def put_decref_set(self, cname, type, rhs_cname, gotref=False):
         self.handle_refnanny(type)
-        self.putln(type.get_decref_set_code(cname, rhs_cname))
+        self.putln(type.get_decref_set_code(cname, rhs_cname, gotref=gotref))
 
-    def put_xdecref_set(self, cname, type, rhs_cname):
+    def put_xdecref_set(self, cname, type, rhs_cname, gotref=False):
         self.handle_refnanny(type)
-        self.putln(type.get_xdecref_set_code(cname, rhs_cname))
+        self.putln(type.get_xdecref_set_code(cname, rhs_cname, gotref=gotref))
 
     def put_incref_memoryviewslice(self, slice_cname, type, have_gil):
         # TODO ideally this would just be merged into "put_incref"

@@ -378,11 +378,21 @@ class PyrexType(BaseType):
             raise NotImplementedError("Ref-counting operation not yet implemented for type %s" %
                                       self)
         return f"{cname} = {rhs_cname}"
+    
+    def _get_dummy_refcounting_newref_code(self, cname, **ignored_kwds):
+        if self.needs_refcounting:
+            raise NotImplementedError("Ref-counting operation not yet implemented for type %s" %
+                                      self)
+        return cname
 
     get_incref_code = get_xincref_code = get_decref_code = get_xdecref_code \
         = get_decref_clear_code = get_xdecref_clear_code \
-        = get_gotref_code = get_xgotref_code = get_giveref_code = get_xgiveref_code \
-            = _get_dummy_refcounting_code
+        = get_gotref_code = get_xgotref_code \
+        = _get_dummy_refcounting_code
+    
+    # (x)giveref returns cname because this is sometimes convenient
+    get_giveref_code = get_xgiveref_code \
+        = get_newref_code = _get_dummy_refcounting_newref_code
 
     get_decref_set_code = get_xdecref_set_code = _get_dummy_refcounting_assignment_code
 
@@ -1151,6 +1161,10 @@ class MemoryViewSliceType(PyrexType):
         # TODO ideally would be done separately
         return f"__PYX_INC_MEMVIEW(&{slice_cname}, {have_gil:d});"
 
+    def get_newref_code(self, name, **kwds):
+        # Like incref, treated separately
+        return name
+
     # decref however did look to always apply for memoryview slices
     # with "have_gil" set to True by default
     def get_xdecref_code(self, cname, nanny, have_gil):
@@ -1168,7 +1182,7 @@ class MemoryViewSliceType(PyrexType):
         return self.get_xdecref_clear_code(cname, **kwds)
 
     # memoryviews don't participate in giveref/gotref
-    get_gotref_code = get_xgotref_code = get_xgiveref_code = get_giveref_code = lambda *args: None
+    get_gotref_code = get_xgotref_code = get_xgiveref_code = get_giveref_code = lambda self, arg, *args: arg
 
 
 
@@ -1335,6 +1349,14 @@ class PyObjectType(PyrexType):
             return f"__Pyx_INCREF({self.as_pyobject(cname)});"
         else:
             return f"Py_INCREF({self.as_pyobject(cname)});"
+        
+    def get_newref_code(self, cname, *, nanny: bool=True, giveref: bool=False):
+        if nanny and giveref:
+            return f"__Pyx_NEWREF_GIVEREF({cname})"
+        elif nanny:
+            return f"__Pyx_NEWREF({cname})"
+        else:
+            return f"__Pyx_NewRef({cname})"
 
     def get_xincref_code(self, cname, nanny):
         if nanny:
@@ -1369,16 +1391,18 @@ class PyObjectType(PyrexType):
         return f"__Pyx_XGOTREF({self.as_pyobject(cname)});"
 
     def get_giveref_code(self, cname):
-        return f"__Pyx_GIVEREF({self.as_pyobject(cname)});"
+        return f"__Pyx_GIVEREF({self.as_pyobject(cname)})"
 
     def get_xgiveref_code(self, cname):
-        return f"__Pyx_XGIVEREF({self.as_pyobject(cname)});"
+        return f"__Pyx_XGIVEREF({self.as_pyobject(cname)})"
 
-    def get_decref_set_code(self, cname, rhs_cname):
-        return f"__Pyx_DECREF_SET({cname}, {rhs_cname});"
+    def get_decref_set_code(self, cname, rhs_cname, gotref=False):
+        gotref_str = "GOTREF_" if gotref else ""
+        return f"__Pyx_{gotref_str}DECREF_SET({cname}, {rhs_cname});"
 
-    def get_xdecref_set_code(self, cname, rhs_cname):
-        return f"__Pyx_XDECREF_SET({cname}, {rhs_cname});"
+    def get_xdecref_set_code(self, cname, rhs_cname, gotref=False):
+        gotref_str = "XGOTREF_" if gotref else ""
+        return f"__Pyx_{gotref_str}XDECREF_SET({cname}, {rhs_cname});"
 
     def _get_decref_code(self, cname, nanny, null_check=False,
                     clear=False, clear_before_decref=False):

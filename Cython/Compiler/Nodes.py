@@ -1112,10 +1112,12 @@ class CArgDeclNode(Node):
         # optimized into a literal after analyse_expressions
         target = cyfunc_struct_target or self.calculate_default_value_code(code)
         default.generate_evaluation_code(code)
-        default.make_owned_reference(code)
-        result = default.result() if overloaded_assignment else default.result_as(self.type)
-        code.putln("%s = %s;" % (target, result))
-        code.put_giveref(default.result(), self.type)
+        result = default.cname_as_owned_reference(
+            code,
+            default.result() if overloaded_assignment else default.result_as(self.type)
+        )
+        result = self.type.get_giveref_code(result)
+        code.putln(f"{target} = {result};")
         default.generate_post_assignment_code(code)
         default.free_temps(code)
 
@@ -7097,10 +7099,9 @@ class ReturnStatNode(StatNode):
                     have_gil=self.in_nogil_context)
                 value.generate_post_assignment_code(code)
             else:
-                value.make_owned_reference(code)
                 code.putln("%s = %s;" % (
                     Naming.retval_cname,
-                    value.result_as(self.return_type)))
+                    value.result_as_owned_reference(code, self.return_type)))
                 value.generate_post_assignment_code(code)
             value.free_temps(code)
         else:
@@ -8195,8 +8196,8 @@ class WithStatNode(StatNode):
             # The temp result will be cleaned up by the WithTargetAssignmentStatNode
             # after assigning its result to the target of the 'with' statement.
             self.target_temp.allocate(code)
-            self.enter_call.make_owned_reference(code)
-            code.putln("%s = %s;" % (self.target_temp.result(), self.enter_call.result()))
+            enter_call_result = self.enter_call.result_as_owned_reference(code)
+            code.putln(f"{self.target_temp.result()} = {enter_call_result};")
             self.enter_call.generate_post_assignment_code(code)
         else:
             self.enter_call.generate_disposal_code(code)

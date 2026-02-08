@@ -180,6 +180,7 @@ cdef bint GIVEREF_and_report(PyObject* _ctx, PyObject* p_obj, Py_ssize_t lineno)
 
 cdef void GIVEREF(PyObject* ctx, PyObject* p_obj, Py_ssize_t lineno) noexcept:
     GIVEREF_and_report(ctx, p_obj, lineno)
+    return p_obj
 
 cdef void INCREF(PyObject* ctx, PyObject* obj, Py_ssize_t lineno) noexcept:
     Py_XINCREF(obj)

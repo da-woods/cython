@@ -562,7 +562,7 @@ class ExprNode(Node):
         """
         return True
 
-    def result_as(self, type = None):
+    def result_as(self, type):
         #  Return the result code cast to the specified C type.
         if (self.is_temp and self.type.is_pyobject and
                 type != py_object_type):
@@ -574,6 +574,27 @@ class ExprNode(Node):
     def py_result(self):
         #  Return the result code cast to PyObject *.
         return self.result_as(py_object_type)
+
+    def result_as_owned_reference(self, code, type=None):
+        """
+        Make sure we own a reference to result.
+        If the result is in a temp, it is already a new reference.
+        """
+        if type is None:
+            result = self.result()
+        else:
+            result = self.result_as(type)
+        return self.cname_as_owned_reference(code, result, type)
+
+    def cname_as_owned_reference(self, code, cname, type=None):
+        type = type or self.ctype()
+        if not self.result_in_temp():
+            code.handle_refnanny(type)
+            # If we're also supposed to generate a giveref then just disable refnanny
+            # on the newref because we can't do "giveref" in place.
+            return self.ctype().get_newref_code(cname)
+        else:
+            return cname
 
     def ctype(self):
         #  Return the native C type of the result (i.e. the
@@ -854,14 +875,6 @@ class ExprNode(Node):
 
     # ---------------- Code Generation -----------------
 
-    def make_owned_reference(self, code):
-        """
-        Make sure we own a reference to result.
-        If the result is in a temp, it is already a new reference.
-        """
-        if not self.result_in_temp():
-            code.put_incref(self.result(), self.ctype())
-
     def make_owned_memoryviewslice(self, code):
         """
         Make sure we own the reference to this memoryview slice.
@@ -964,11 +977,11 @@ class ExprNode(Node):
 
     # ----Generation of small bits of reference counting --
 
-    def generate_decref_set(self, code, rhs):
-        code.put_decref_set(self.result(), self.ctype(), rhs)
+    def generate_decref_set(self, code, rhs, gotref=False):
+        code.put_decref_set(self.result(), self.ctype(), rhs, gotref=gotref)
 
-    def generate_xdecref_set(self, code, rhs):
-        code.put_xdecref_set(self.result(), self.ctype(), rhs)
+    def generate_xdecref_set(self, code, rhs, gotref=False):
+        code.put_xdecref_set(self.result(), self.ctype(), rhs, gotref=gotref)
 
     def generate_gotref(self, code, handle_null=False,
                         maybe_null_extra_check=True):
@@ -2719,24 +2732,25 @@ class NameNode(AtomicExprNode):
                 #print "...from", rhs ###
                 #print "...LHS type", self.type, "ctype", self.ctype() ###
                 #print "...RHS type", rhs.type, "ctype", rhs.ctype() ###
+                if rhs.is_name and rhs.name == "c":
+                    breakpoint()
                 if self.use_managed_ref:
-                    rhs.make_owned_reference(code)
                     is_external_ref = entry.is_cglobal or self.entry.in_closure or self.entry.from_closure
+                    rhs_result = rhs.result_as_owned_reference(
+                        code, type=self.ctype())
                     if is_external_ref:
-                        self.generate_gotref(code, handle_null=True)
-                    assigned = True
+                        rhs_result = self.ctype().get_giveref_code(rhs_result)
+            
                     if entry.is_cglobal:
-                        self.generate_decref_set(code, rhs.result_as(self.ctype()))
+                        self.generate_decref_set(code, rhs_result, gotref=is_external_ref)
                     else:
                         if not self.cf_is_null:
                             if self.cf_maybe_null:
-                                self.generate_xdecref_set(code, rhs.result_as(self.ctype()))
+                                self.generate_xdecref_set(code, rhs_result, gotref=is_external_ref)
                             else:
-                                self.generate_decref_set(code, rhs.result_as(self.ctype()))
+                                self.generate_decref_set(code, rhs_result, gotref=is_external_ref)
                         else:
-                            assigned = False
-                    if is_external_ref:
-                        rhs.generate_giveref(code)
+                            code.putln(f"{self.result()} = {rhs_result};")
             if not self.type.is_memoryviewslice:
                 if not assigned:
                     if overloaded_assignment:
@@ -6950,8 +6964,8 @@ class PyMethodCallNode(CallNode):
 
         # FIXME: Should use "coerce_to_temp()" in "__init__()" instead, but that needs "env".
         function = code.funcstate.allocate_temp(py_object_type, manage_ref=True)
-        self.function.make_owned_reference(code)
-        code.putln("%s = %s; " % (function, self.function.py_result()))
+        function_result = self.function.result_as_owned_reference(code, py_object_type)
+        code.putln(f"{function} = {function_result};")
         self.function.generate_disposal_code(code)
         self.function.free_temps(code)
         return function
@@ -7685,8 +7699,8 @@ class MergedDictNode(ExprNode):
                        item.py_result())
 
         if item.is_dict_literal:
-            item.make_owned_reference(code)
-            code.putln("%s = %s;" % (self.result(), item.py_result()))
+            item_result = item.result_as_owned_reference(code, type=py_object_type)
+            code.putln(f"{self.result()} = {item_result};")
             item.generate_post_assignment_code(code)
         else:
             if item.result_in_temp():
@@ -8349,22 +8363,19 @@ class AttributeNode(ExprNode):
             rhs.free_temps(code)
         else:
             select_code = self.result()
-            if self.type.is_pyobject and self.use_managed_ref:
-                rhs.make_owned_reference(code)
-                rhs.generate_giveref(code)
-                code.put_gotref(select_code, self.type)
-                code.put_decref(select_code, self.ctype())
-            elif self.type.is_memoryviewslice:
+            if self.type.is_memoryviewslice:
                 from . import MemoryView
                 MemoryView.put_assign_to_memviewslice(
                         select_code, rhs, rhs.result(), self.type, code)
-
-            if not self.type.is_memoryviewslice:
-                code.putln(
-                    "%s = %s;" % (
-                        select_code,
-                        rhs.move_result_rhs_as(self.ctype())))
-                        #rhs.result()))
+            else:
+                rhs_result = rhs.move_result_rhs_as(self.ctype())
+                if self.use_managed_ref and self.type.needs_refcounting:
+                    rhs_result = rhs.cname_as_owned_reference(
+                        code, rhs_result, self.type)
+                    rhs_result = self.type.get_giveref_code(rhs_result)
+                    code.put_decref_set(select_code, self.ctype(), rhs_result, gotref=True)
+                else:
+                    code.putln(f"{select_code} = {rhs_result};")
             rhs.generate_post_assignment_code(code)
             rhs.free_temps(code)
         self.obj.generate_disposal_code(code)
@@ -11023,11 +11034,8 @@ class YieldExprNode(ExprNode):
     def generate_evaluation_code(self, code):
         if self.arg:
             self.arg.generate_evaluation_code(code)
-            self.arg.make_owned_reference(code)
-            code.putln(
-                "%s = %s;" % (
-                    Naming.retval_cname,
-                    self.arg.result_as(py_object_type)))
+            arg_result = self.arg.result_as_owned_reference(code, type=py_object_type)
+            code.putln(f"{Naming.retval_cname} = {arg_result};")
             self.arg.generate_post_assignment_code(code)
             self.arg.free_temps(code)
         else:
@@ -13620,8 +13628,8 @@ class BoolBinopResultNode(ExprNode):
             if and_label or or_label:
                 code.putln("} else {")
             self.value.generate_evaluation_code(code)
-            self.value.make_owned_reference(code)
-            code.putln("%s = %s;" % (final_result_temp, self.value.result_as(final_result_type)))
+            value_result = self.value.result_as_owned_reference(code, final_result_type)
+            code.putln(f"{final_result_temp} = {value_result};")
             self.value.generate_post_assignment_code(code)
             # disposal: {not (and_label and or_label) [else]}
             self.arg.generate_disposal_code(code)
@@ -13762,9 +13770,10 @@ class CondExprNode(ExprNode):
         expr.generate_evaluation_code(code)
         if self.type.is_memoryviewslice:
             expr.make_owned_memoryviewslice(code)
+            expr_result = expr.result_as(self.ctype())
         else:
-            expr.make_owned_reference(code)
-        code.putln('%s = %s;' % (self.result(), expr.result_as(self.ctype())))
+            expr_result = expr.result_as_owned_reference(code, self.ctype())
+        code.putln(f'{self.result()} = {expr_result};')
         expr.generate_post_assignment_code(code)
         expr.free_temps(code)
 

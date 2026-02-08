@@ -52,13 +52,10 @@ class TempRefNode(AtomicExprNode):
 
     def generate_assignment_code(self, rhs, code, overloaded_assignment=False):
         if self.type.is_pyobject:
-            rhs.make_owned_reference(code)
             # TODO: analyse control flow to see if this is necessary
             code.put_xdecref(self.result(), self.ctype())
-        code.putln('%s = %s;' % (
-            self.result(),
-            rhs.result() if overloaded_assignment else rhs.result_as(self.ctype()),
-        ))
+        rhs_result = rhs.result_as_owned_reference(code, None if overloaded_assignment else self.ctype())
+        code.putln(f'{self.result()} = {rhs_result};')
         rhs.generate_post_assignment_code(code)
         rhs.free_temps(code)
 
@@ -201,13 +198,10 @@ class ResultRefNode(AtomicExprNode):
 
     def generate_assignment_code(self, rhs, code, overloaded_assignment=False):
         if self.type.is_pyobject:
-            rhs.make_owned_reference(code)
             if not self.lhs_of_first_assignment:
                 code.put_decref(self.result(), self.ctype())
-        code.putln('%s = %s;' % (
-            self.result(),
-            rhs.result() if overloaded_assignment else rhs.result_as(self.ctype()),
-        ))
+        rhs_result = rhs.result_as_owned_reference(code, None if overloaded_assignment else self.ctype())
+        code.putln(f'{self.result()} = {rhs_result};')
         rhs.generate_post_assignment_code(code)
         rhs.free_temps(code)
 
@@ -237,11 +231,9 @@ class LetNodeMixin:
         else:
             if self.temp_type.is_memoryviewslice:
                 self.temp_expression.make_owned_memoryviewslice(code)
-            else:
-                self.temp_expression.make_owned_reference(code)
             self.temp = code.funcstate.allocate_temp(
                 self.temp_type, manage_ref=True)
-            code.putln("%s = %s;" % (self.temp, self.temp_expression.result()))
+            code.putln(f"{self.temp} = {self.temp_expression.result()};")
             self.temp_expression.generate_disposal_code(code)
             self.temp_expression.free_temps(code)
         self.lazy_temp.result_code = self.temp
