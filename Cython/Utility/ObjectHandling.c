@@ -3002,7 +3002,7 @@ static CYTHON_INLINE PyObject *__Pyx_PyUnicode_ConcatInPlaceImpl(PyObject **p_le
 
         int ret;
         // GIVEREF/GOTREF since we expect *p_left to change (although it won't change on failures).
-        __Pyx_GIVEREF(*p_left);
+        (void)__Pyx_GIVEREF(*p_left);
         ret = PyUnicode_Resize(p_left, new_len);
         __Pyx_GOTREF(*p_left);
         if (unlikely(ret != 0))

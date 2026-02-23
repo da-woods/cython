@@ -1350,13 +1350,14 @@ class PyObjectType(PyrexType):
         else:
             return f"Py_INCREF({self.as_pyobject(cname)});"
         
-    def get_newref_code(self, cname, *, nanny: bool=True, giveref: bool=False):
-        if nanny and giveref:
-            return f"__Pyx_NEWREF_GIVEREF({cname})"
-        elif nanny:
-            return f"__Pyx_NEWREF({cname})"
+    def get_newref_code(self, cname, *, nanny: bool=True):
+        result_cast = ""
+        if (not self.is_complete()) or self.is_extension_type:
+            result_cast = f"({self.empty_declaration_code()})"
+        if nanny:
+            return f"{result_cast}__Pyx_NEWREF({self.as_pyobject(cname)})"
         else:
-            return f"__Pyx_NewRef({cname})"
+            return f"{result_cast}__Pyx_NewRef({cname})"
 
     def get_xincref_code(self, cname, nanny):
         if nanny:

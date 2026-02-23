@@ -563,17 +563,20 @@ class ExprNode(Node):
         return True
 
     def result_as(self, type):
-        #  Return the result code cast to the specified C type.
-        if (self.is_temp and self.type.is_pyobject and
-                type != py_object_type):
-            # Allocated temporaries are always PyObject *, which may not
-            # reflect the actual type (e.g. an extension type)
-            return typecast(type, py_object_type, self.result())
-        return typecast(type, self.ctype(), self.result())
+        return self._cname_as(self.result(), type)
 
     def py_result(self):
         #  Return the result code cast to PyObject *.
         return self.result_as(py_object_type)
+
+    def _cname_as(self, cname, type):
+        #  Return the cname code cast to the specified C type.
+        if (self.is_temp and self.type.is_pyobject and
+                type != py_object_type):
+            # Allocated temporaries are always PyObject *, which may not
+            # reflect the actual type (e.g. an extension type)
+            return typecast(type, py_object_type, cname)
+        return typecast(type, self.ctype(), cname)
 
     def result_as_owned_reference(self, code, type=None):
         """
@@ -2732,14 +2735,13 @@ class NameNode(AtomicExprNode):
                 #print "...from", rhs ###
                 #print "...LHS type", self.type, "ctype", self.ctype() ###
                 #print "...RHS type", rhs.type, "ctype", rhs.ctype() ###
-                if rhs.is_name and rhs.name == "c":
-                    breakpoint()
                 if self.use_managed_ref:
                     is_external_ref = entry.is_cglobal or self.entry.in_closure or self.entry.from_closure
                     rhs_result = rhs.result_as_owned_reference(
                         code, type=self.ctype())
                     if is_external_ref:
                         rhs_result = self.ctype().get_giveref_code(rhs_result)
+                    assigned = True
             
                     if entry.is_cglobal:
                         self.generate_decref_set(code, rhs_result, gotref=is_external_ref)

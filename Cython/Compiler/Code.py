@@ -2665,8 +2665,6 @@ class CCodeWriter:
         return self.buffer.getvalue()
 
     def write(self, s):
-        if "__Pyx_DECREF_SET(__pyx_v_s, __Pyx_NEWREF(__pyx_v_original_scanner))" in s:
-            breakpoint()
         if '\n' in s:
             self._write_lines(s)
         else:
