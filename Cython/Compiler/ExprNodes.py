@@ -583,21 +583,17 @@ class ExprNode(Node):
         Make sure we own a reference to result.
         If the result is in a temp, it is already a new reference.
         """
-        if type is None:
-            result = self.result()
-        else:
-            result = self.result_as(type)
-        return self.cname_as_owned_reference(code, result, type)
+        return self.cname_as_owned_reference(code, self.result(), type)
 
     def cname_as_owned_reference(self, code, cname, type=None):
-        type = type or self.ctype()
         if not self.result_in_temp():
-            code.handle_refnanny(type)
+            code.handle_refnanny(type or self.ctype())
             # If we're also supposed to generate a giveref then just disable refnanny
             # on the newref because we can't do "giveref" in place.
-            return self.ctype().get_newref_code(cname)
-        else:
-            return cname
+            cname = self.ctype().get_newref_code(cname)
+        if type is not None:
+            return self._cname_as(cname, type)
+        return cname
 
     def ctype(self):
         #  Return the native C type of the result (i.e. the
@@ -8370,13 +8366,14 @@ class AttributeNode(ExprNode):
                 MemoryView.put_assign_to_memviewslice(
                         select_code, rhs, rhs.result(), self.type, code)
             else:
-                rhs_result = rhs.move_result_rhs_as(self.ctype())
                 if self.use_managed_ref and self.type.needs_refcounting:
+                    rhs_result = rhs.result()
                     rhs_result = rhs.cname_as_owned_reference(
-                        code, rhs_result, self.type)
+                        code, rhs_result)
                     rhs_result = self.type.get_giveref_code(rhs_result)
                     code.put_decref_set(select_code, self.ctype(), rhs_result, gotref=True)
                 else:
+                    rhs_result = rhs.move_result_rhs_as(self.ctype())
                     code.putln(f"{select_code} = {rhs_result};")
             rhs.generate_post_assignment_code(code)
             rhs.free_temps(code)

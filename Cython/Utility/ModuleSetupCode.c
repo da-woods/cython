@@ -2002,7 +2002,7 @@ static CYTHON_INLINE int __Pyx_Is_Little_Endian(void)
     void (*INCREF)(void*, PyObject*, Py_ssize_t);
     void (*DECREF)(void*, PyObject*, Py_ssize_t);
     void (*GOTREF)(void*, PyObject*, Py_ssize_t);
-    void (*GIVEREF)(void*, PyObject*, Py_ssize_t);
+    PyObject* (*GIVEREF)(void*, PyObject*, Py_ssize_t);
     void* (*SetupContext)(const char*, Py_ssize_t, const char*);
     void (*FinishContext)(void**);
   } __Pyx_RefNannyAPIStruct;
@@ -2030,7 +2030,7 @@ static CYTHON_INLINE int __Pyx_Is_Little_Endian(void)
   #define __Pyx_RefNannyFinishContext() \
           __Pyx_RefNanny->FinishContext(&__pyx_refnanny)
   #define __Pyx_INCREF(r)  __Pyx_RefNanny->INCREF(__pyx_refnanny, (PyObject *)(r), (__LINE__))
-  #define __Pyx_NEWREF(r) __Pyx__NEWREF(__pyx_refnanny, (PyObject *)(r), (__LINE__))
+  #define __Pyx_NEWREF(r) __Pyx__NEWREF(__Pyx_RefNanny, __pyx_refnanny, (PyObject *)(r), (__LINE__))
   #define __Pyx_DECREF(r)  __Pyx_RefNanny->DECREF(__pyx_refnanny, (PyObject *)(r), (__LINE__))
   #define __Pyx_GOTREF(r)  __Pyx_RefNanny->GOTREF(__pyx_refnanny, (PyObject *)(r), (__LINE__))
   #define __Pyx_GIVEREF(r) __Pyx_RefNanny->GIVEREF(__pyx_refnanny, (PyObject *)(r), (__LINE__))
@@ -2039,8 +2039,8 @@ static CYTHON_INLINE int __Pyx_Is_Little_Endian(void)
   #define __Pyx_XDECREF(r)  do { if((r) == NULL); else {__Pyx_DECREF(r); }} while(0)
   #define __Pyx_XGOTREF(r)  do { if((r) == NULL); else {__Pyx_GOTREF(r); }} while(0)
   #define __Pyx_XGIVEREF(r) ((r) ? __Pyx_GIVEREF((r)) : NULL)
-  static CYTHON_INLINE __Pyx__NEWREF(__Pyx_RefNannyAPIStruct* refnanny, PyObject *r, Py_ssize_t line) {
-      refnanny->INCREF(refnanny, r, line);
+  static CYTHON_INLINE PyObject *__Pyx__NEWREF(__Pyx_RefNannyAPIStruct *RefNanny, void *refnanny, PyObject *r, Py_ssize_t line) {
+      RefNanny->INCREF(refnanny, r, line);
       return r;
   }
 #else
@@ -2074,7 +2074,7 @@ static CYTHON_INLINE int __Pyx_Is_Little_Endian(void)
     } while (0)
 #define __Pyx_XGOTREF_XDECREF_SET(r, v) do {                    \
         PyObject *tmp = (PyObject *) r;                         \
-        r = v; (void)__Pyx_XGOTREF(tmp); __Pyx_XDECREF(tmp);          \
+        r = v; __Pyx_XGOTREF(tmp); __Pyx_XDECREF(tmp);          \
     } while (0)
 #define __Pyx_GOTREF_DECREF_SET(r, v) do {                      \
         PyObject *tmp = (PyObject *) r;                         \

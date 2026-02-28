@@ -122,7 +122,7 @@ cdef class CCodeWriter(object):
     cdef bint bol
 
     @cython.final
-    cdef void handle_refnanny(self, tp, bint nanny=*)
+    cdef void _handle_refnanny(self, tp, bint nanny=*)
     cpdef write(self, s)
     cdef _write_lines(self, s)
     cpdef _write_to_buffer(self, s)

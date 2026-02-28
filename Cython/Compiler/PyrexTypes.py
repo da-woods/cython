@@ -1182,8 +1182,8 @@ class MemoryViewSliceType(PyrexType):
         return self.get_xdecref_clear_code(cname, **kwds)
 
     # memoryviews don't participate in giveref/gotref
-    get_gotref_code = get_xgotref_code = get_xgiveref_code = get_giveref_code = lambda self, arg, *args: arg
-
+    get_xgiveref_code = get_giveref_code = lambda self, arg, *args: arg
+    get_gotref_code = get_xgotref_code = lambda self, *args: ""
 
 
 class BufferType(BaseType):
@@ -1392,10 +1392,16 @@ class PyObjectType(PyrexType):
         return f"__Pyx_XGOTREF({self.as_pyobject(cname)});"
 
     def get_giveref_code(self, cname):
-        return f"__Pyx_GIVEREF({self.as_pyobject(cname)})"
+        result_cast = ""
+        if (not self.is_complete()) or self.is_extension_type:
+            result_cast = f"({self.empty_declaration_code()})"
+        return f"{result_cast}__Pyx_GIVEREF({self.as_pyobject(cname)})"
 
     def get_xgiveref_code(self, cname):
-        return f"__Pyx_XGIVEREF({self.as_pyobject(cname)})"
+        result_cast = ""
+        if (not self.is_complete()) or self.is_extension_type:
+            result_cast = f"({self.empty_declaration_code()})"
+        return f"{result_cast}__Pyx_XGIVEREF({self.as_pyobject(cname)})"
 
     def get_decref_set_code(self, cname, rhs_cname, gotref=False):
         gotref_str = "GOTREF_" if gotref else ""

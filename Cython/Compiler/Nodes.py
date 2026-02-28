@@ -2529,7 +2529,8 @@ class FuncDefNode(StatNode, BlockNode):
             err_val = self.error_value()
             if err_val is None and default_retval:
                 err_val = default_retval  # FIXME: why is err_val not used?
-            code.put_xgiveref(Naming.retval_cname, return_type)
+            if not return_type.is_void:
+                code.put_xgiveref(Naming.retval_cname, return_type)
 
         if self.entry.is_special and self.entry.name == "__hash__":
             # Returning -1 for __hash__ is supposed to signal an error

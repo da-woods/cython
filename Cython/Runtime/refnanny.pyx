@@ -178,7 +178,7 @@ cdef bint GIVEREF_and_report(PyObject* _ctx, PyObject* p_obj, Py_ssize_t lineno)
         ctx.release_lock()
         return decref_ok  # swallow any exceptions
 
-cdef void GIVEREF(PyObject* ctx, PyObject* p_obj, Py_ssize_t lineno) noexcept:
+cdef PyObject* GIVEREF(PyObject* ctx, PyObject* p_obj, Py_ssize_t lineno) noexcept:
     GIVEREF_and_report(ctx, p_obj, lineno)
     return p_obj
 
@@ -220,7 +220,7 @@ ctypedef struct RefNannyAPIStruct:
     void (*INCREF)(PyObject*, PyObject*, Py_ssize_t)
     void (*DECREF)(PyObject*, PyObject*, Py_ssize_t)
     void (*GOTREF)(PyObject*, PyObject*, Py_ssize_t)
-    void (*GIVEREF)(PyObject*, PyObject*, Py_ssize_t)
+    PyObject* (*GIVEREF)(PyObject*, PyObject*, Py_ssize_t)
     PyObject* (*SetupContext)(char*, Py_ssize_t, char*) except NULL
     void (*FinishContext)(PyObject**)
 

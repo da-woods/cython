@@ -3114,23 +3114,27 @@ class CCodeWriter:
         return typecast(py_object_type, type, cname)
 
     def handle_refnanny(self, tp, nanny=True):
+        self._handle_refnanny(tp, nanny=nanny)
+
+    # fast internal cdef interface
+    def _handle_refnanny(self, tp, nanny=True):
         if tp.supports_refnanny and nanny:
             self.funcstate.needs_refnanny = True
 
     def put_gotref(self, cname, type):
-        self.handle_refnanny(type)
+        self._handle_refnanny(type)
         self.putln(type.get_gotref_code(cname))
 
     def put_giveref(self, cname, type):
-        self.handle_refnanny(type)
+        self._handle_refnanny(type)
         self.putln(f"(void){type.get_giveref_code(cname)};")
 
     def put_xgiveref(self, cname, type):
-        self.handle_refnanny(type)
+        self._handle_refnanny(type)
         self.putln(f"(void){type.get_xgiveref_code(cname)};")
 
     def put_xgotref(self, cname, type):
-        self.handle_refnanny(type)
+        self._handle_refnanny(type)
         self.putln(type.get_xgotref_code(cname))
 
     def put_incref(self, cname, type, nanny=True):
@@ -3138,42 +3142,42 @@ class CCodeWriter:
         # this is unnecessary since the relevant utility code is loaded anyway if a memoryview is used
         # and so has been removed. However, it's potentially a feature that might be useful here
         if nanny:
-            self.handle_refnanny(type)
+            self._handle_refnanny(type)
         self.putln(type.get_incref_code(cname, nanny=nanny))
 
     def put_xincref(self, cname, type, nanny=True):
         if nanny:
-            self.handle_refnanny(type)
+            self._handle_refnanny(type)
         self.putln(type.get_xincref_code(cname, nanny=nanny))
 
     def put_decref(self, cname, type, nanny=True, have_gil=True):
         if nanny:
-            self.handle_refnanny(type)
+            self._handle_refnanny(type)
         self.putln(type.get_decref_code(cname, nanny=nanny, have_gil=have_gil))
 
     def put_xdecref(self, cname, type, nanny=True, have_gil=True):
         if nanny:
-            self.handle_refnanny(type)
+            self._handle_refnanny(type)
         self.putln(type.get_xdecref_code(cname, nanny=nanny, have_gil=have_gil))
 
     def put_decref_clear(self, cname, type, clear_before_decref=False, nanny=True, have_gil=True):
         if nanny:
-            self.handle_refnanny(type)
+            self._handle_refnanny(type)
         self.putln(type.get_decref_clear_code(
             cname, clear_before_decref=clear_before_decref, nanny=nanny, have_gil=have_gil))
 
     def put_xdecref_clear(self, cname, type, clear_before_decref=False, nanny=True, have_gil=True):
         if nanny:
-            self.handle_refnanny(type)
+            self._handle_refnanny(type)
         self.putln(type.get_xdecref_clear_code(
             cname, clear_before_decref=clear_before_decref, nanny=nanny, have_gil=have_gil))
 
     def put_decref_set(self, cname, type, rhs_cname, gotref=False):
-        self.handle_refnanny(type)
+        self._handle_refnanny(type)
         self.putln(type.get_decref_set_code(cname, rhs_cname, gotref=gotref))
 
     def put_xdecref_set(self, cname, type, rhs_cname, gotref=False):
-        self.handle_refnanny(type)
+        self._handle_refnanny(type)
         self.putln(type.get_xdecref_set_code(cname, rhs_cname, gotref=gotref))
 
     def put_incref_memoryviewslice(self, slice_cname, type, have_gil):
