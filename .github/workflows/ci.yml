@@ -52,6 +52,7 @@ jobs:
       matrix:
         os: [ubuntu-22.04]
         backend: [c]
+        python-version: ["3.14"]
 
         include:
           # GraalPy
@@ -62,7 +63,7 @@ jobs:
 
     uses: ./.github/workflows/ci-job.yml
     with:
-      python-version: "3.14"
+      python-version: ${{ matrix.python-version }}
       os: ${{ matrix.os }}
       backend: ${{ matrix.backend }}
       limited_api: ${{ matrix.limited_api }}
