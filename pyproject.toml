@@ -12,7 +12,7 @@ skip = [
     "cp31?t-*",
 ]
 enable = ["cpython-prerelease"]
-environment = {"PIP_BUILD_CONSTRAINT"="$(pwd)/.wheel_build_requirements/constraints.txt"}
+environment = {"PIP_BUILD_CONSTRAINT"="$(pwd)/.wheel_build_constraints/constraints.txt"}
 # As a quick sanity check, run Cython on some of its own sources
 # (not a full rebuild though, because it uses the local files and not the installed wheel).
 test-command = [
@@ -30,7 +30,7 @@ CFLAGS = "-O3 -g0 -pipe -fPIC -march=core2 -mno-ssse3"
 AR = "gcc-ar"
 NM = "gcc-nm"
 RANLIB = "gcc-ranlib"
-PIP_BUILD_CONSTRAINT = "$(pwd)/.wheel_build_requirements/constraints.txt"
+PIP_BUILD_CONSTRAINT = "$(pwd)/.wheel_build_constraints/constraints.txt"
 
 [[tool.cibuildwheel.overrides]]
 select = "*aarch64"
