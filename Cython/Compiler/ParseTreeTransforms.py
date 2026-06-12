@@ -26,6 +26,8 @@ from .StringEncoding import EncodedString
 from .Errors import error, warning, CompileError, InternalError
 
 
+invalid syntax
+
 class SkipDeclarations:
     """
     Variable and function declarations can often have a deep tree structure,
