@@ -1156,3 +1156,94 @@ static CYTHON_INLINE int __Pyx_CallSlotAsVectorcallUnpackDict(Py_ssize_t args_si
     }
     return 0;
 }
+
+/////////////// DeallocKeepAlive.module_state_decls ////////////////
+
+#if CYTHON_COMPILING_IN_CPYTHON_FREETHREADING
+PyObject *__pyx_defer_dealloc_to_gc_list;
+#endif
+
+/////////////// DeallocKeepAlive.module_state_clear ////////////////
+
+#if CYTHON_COMPILING_IN_CPYTHON_FREETHREADING
+Py_CLEAR(clear_module_state->__pyx_defer_dealloc_to_gc_list);
+#endif
+
+/////////////// DeallocKeepAlive.cleanup ////////////////
+
+#if CYTHON_COMPILING_IN_CPYTHON_FREETHREADING
+Py_CLEAR(CGLOBAL(__pyx_defer_dealloc_to_gc_list));
+#endif
+
+/////////////// DeallocKeepAlive.init ////////////////
+
+#if CYTHON_COMPILING_IN_CPYTHON_FREETHREADING
+{
+    PyObject *meth = NULL;
+    CGLOBAL(__pyx_defer_dealloc_to_gc_list) = PyList_New(0);
+    if (unlikely(!CGLOBAL(__pyx_defer_dealloc_to_gc_list))) {
+        goto gc_cleanup_end;
+    }
+    meth = PyCFunction_New(
+        &__pyx_gc_cleanup_func_mdef, CGLOBAL(__pyx_defer_dealloc_to_gc_list));
+    if (unlikely(!meth)) goto gc_cleanup_end;
+    {
+        PyObject *gc = PyImport_ImportModule("gc");
+        if (unlikely(!gc)) goto gc_cleanup_end;
+        PyObject *callbacks = PyObject_GetAttrString(gc, "callbacks");
+        Py_DECREF(gc);
+        if (unlikely(!callbacks)) goto gc_cleanup_end;
+        PyList_Append(callbacks, meth);
+    }
+
+    gc_cleanup_end:;
+    Py_XDECREF(meth);
+}
+#endif
+
+/////////////// DeallocKeepAlive.proto ///////////////
+
+#if CYTHON_COMPILING_IN_CPYTHON_FREETHREADING
+static PyObject *__pyx_gc_cleanup_func(PyObject *self, PyObject *args);
+
+PyMethodDef __pyx_gc_cleanup_func_mdef = {
+    "cython_gc_cleanup_func",
+    __pyx_gc_cleanup_func,
+    METH_VARARGS,
+    NULL
+};
+
+static int __pyx_is_in_gc_loop = 0;
+
+#define __Pyx_DeallocKeepAliveBegin(o) \
+    if (!__pyx_is_in_gc_loop && !Py_IsFinalizing()) { \
+        PyList_Append(CGLOBAL(__pyx_defer_dealloc_to_gc_list), o); \
+        __Pyx_PyErr_RestoreException(etype, eval, etb); \
+        return; \
+    } \
+    Py_SET_REFCNT(o, Py_REFCNT(o) + 1)
+#define __Pyx_DeallocKeepAliveEnd(o)   \
+    Py_SET_REFCNT(o, Py_REFCNT(o) - 1);
+#else
+#define __Pyx_DeallocKeepAliveBegin(o) Py_SET_REFCNT(o, Py_REFCNT(o) + 1)
+#define __Pyx_DeallocKeepAliveEnd(o)   Py_SET_REFCNT(o, Py_REFCNT(o) - 1)
+#endif
+
+/////////////// DeallocKeepAlive ///////////////
+
+static PyObject *__pyx_gc_cleanup_func(PyObject *self, PyObject *args) {
+    PyObject *phase, *collected;
+    if (unlikely(PyArg_UnpackTuple(args, "gc_cleanup_func", 2, 2, &phase, &collected) < 0)) {
+        return NULL;
+    }
+    if (PyUnicode_CompareWithASCIIString(phase, "stop") != 0) {
+        return __Pyx_NewRef(Py_None);
+    }
+    int old_is_in_gc_loop = __pyx_is_in_gc_loop;
+    __pyx_is_in_gc_loop = 1;
+    if (PyList_SetSlice(self, 0, PY_SSIZE_T_MAX, NULL) < 0) {
+        return NULL;
+    }
+    __pyx_is_in_gc_loop = old_is_in_gc_loop;
+    return __Pyx_NewRef(Py_None);
+}

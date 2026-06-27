@@ -2201,9 +2201,11 @@ class ModuleNode(Nodes.Node, Nodes.BlockNode):
         code.putln("__Pyx_PyErr_FetchException(&etype, &eval, &etb);")
         # increase the refcount while we are calling into user code
         # to prevent recursive deallocation
-        code.putln("Py_SET_REFCNT(o, Py_REFCNT(o) + 1);")
+        code.globalstate.use_utility_code(
+            UtilityCode.load_cached("DeallocKeepAlive", "ExtensionTypes.c"))
+        code.putln("__Pyx_DeallocKeepAliveBegin(o);")
         code.putln("%s(o);" % entry.func_cname)
-        code.putln("Py_SET_REFCNT(o, Py_REFCNT(o) - 1);")
+        code.putln("__Pyx_DeallocKeepAliveEnd(o);")
         code.putln("__Pyx_PyErr_RestoreException(etype, eval, etb);")
         code.putln("}")
 
