@@ -158,11 +158,13 @@ jobs:
 
       - name: Compile manually
         timeout-minutes: 10
+        if: ${{ always() }}
         run: |
           "C:\Program Files\Microsoft Visual Studio\18\Enterprise\VC\Tools\MSVC\14.51.36231\bin\HostARM64\ARM64\cl.exe" /c /nologo /O2 /W3 /GL /DNDEBUG /MD -DCYTHON_USE_TYPE_SPECS=1 -IC:\hostedtoolcache\windows\Python\3.14.8\arm64\include -IC:\hostedtoolcache\windows\Python\3.14.8\arm64\Include "-IC:\Program Files\Microsoft Visual Studio\18\Enterprise\VC\Tools\MSVC\14.51.36231\include" "-IC:\Program Files\Microsoft Visual Studio\18\Enterprise\VC\Tools\MSVC\14.51.36231\ATLMFC\include" "-IC:\Program Files\Microsoft Visual Studio\18\Enterprise\VC\Auxiliary\VS\include" "-IC:\Program Files (x86)\Windows Kits\10\include\10.0.26100.0\ucrt" "-IC:\Program Files (x86)\Windows Kits\10\\include\10.0.26100.0\\um" "-IC:\Program Files (x86)\Windows Kits\10\\include\10.0.26100.0\\shared" "-IC:\Program Files (x86)\Windows Kits\10\\include\10.0.26100.0\\winrt" "-IC:\Program Files (x86)\Windows Kits\10\\include\10.0.26100.0\\cppwinrt" "-IC:\Program Files (x86)\Windows Kits\NETFXSDK\4.8.1\include\um" /TcC:\a\cython\cython\Cython\Runtime\refnanny.c /Fobuild\temp.win-arm64-cpython-314\Release\a\cython\cython\Cython\Runtime\refnanny.obj
 
       - name: Link manually
         timeout-minutes: 10
+        if: ${{ always() }}
         run: |
           "C:\Program Files\Microsoft Visual Studio\18\Enterprise\VC\Tools\MSVC\14.51.36231\bin\HostARM64\ARM64\link.exe" /nologo /INCREMENTAL:NO /LTCG /DLL /MANIFEST:EMBED,ID=2 /MANIFESTUAC:NO /LIBPATH:C:\hostedtoolcache\windows\Python\3.14.8\arm64\libs /LIBPATH:C:\hostedtoolcache\windows\Python\3.14.8\arm64 /LIBPATH:C:\hostedtoolcache\windows\Python\3.14.8\arm64\PCbuild\arm64 "/LIBPATH:C:\Program Files\Microsoft Visual Studio\18\Enterprise\VC\Tools\MSVC\14.51.36231\ATLMFC\lib\ARM64" "/LIBPATH:C:\Program Files\Microsoft Visual Studio\18\Enterprise\VC\Tools\MSVC\14.51.36231\lib\ARM64" "/LIBPATH:C:\Program Files (x86)\Windows Kits\NETFXSDK\4.8.1\lib\um\arm64" "/LIBPATH:C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\ucrt\arm64" "/LIBPATH:C:\Program Files (x86)\Windows Kits\10\\lib\10.0.26100.0\\um\arm64" /EXPORT:PyInit_refnanny build\temp.win-arm64-cpython-314\Release\a\cython\cython\Cython\Runtime\refnanny.obj /OUT:build\lib.win-arm64-cpython-314\Cython\Runtime\refnanny.cp314-win_arm64.pyd /IMPLIB:build\temp.win-arm64-cpython-314\Release\a\cython\cython\Cython\Runtime\refnanny.cp314-win_arm64.lib
 
