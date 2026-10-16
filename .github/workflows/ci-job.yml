@@ -154,7 +154,7 @@ jobs:
         if: ${{ always() }}
         with:
           name: refnanny-${{ runner.os }}-${{ runner.arch }}-${{ inputs.python-version }}${{ inputs.extra_hash }}
-          path: **/refnanny.c
+          path: C:\a\cython\cython\Cython\Runtime\refnanny.c
 
       - name: Compile manually
         timeout-minutes: 10
