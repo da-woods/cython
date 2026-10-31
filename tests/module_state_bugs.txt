@@ -9,7 +9,7 @@ extern_varobject_extensions
 
 # #8081
 run[.]cyfunction_defaults
-[.]memslice 
+[.]memslice
 
 # reimport doesn't work with module state
 reimport_from_package
@@ -27,3 +27,4 @@ TestIpythonMagic
 [.]test_grammar
 [.]trace_nogil_compilation
 [.]coverage_nogil
+[.]dealloc_raise
