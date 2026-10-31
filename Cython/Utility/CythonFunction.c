@@ -116,6 +116,8 @@ typedef struct {
 // In module state mode some of these functions have QuickCheck versions which are allowed
 // to produce a false negative to avoid having to look up the module state (which is
 // generally pretty slow).
+static CYTHON_INLINE PyType_Spec *__Pyx_Get_CyFunction_Spec(void); /* proto */
+
 #if __PYX_LIMITED_VERSION_HEX >= 0x030F0000
 #define __Pyx_CyFunction_QuickCheck(obj)  \
     (PyType_GetBaseByToken_DuringGC(Py_TYPE(obj), __Pyx_Get_CyFunction_Spec(), NULL) == 1)
@@ -308,6 +310,10 @@ static int __pyx_CyFunction_init(PyObject *module) {
 
     mstate->__pyx_CyFunctionType = tp;
     return 0;
+}
+
+static CYTHON_INLINE PyType_Spec *__Pyx_Get_CyFunction_Spec(void) {
+    return __Pyx__Get_CyFunction_Spec();
 }
 
 //////////////////// CythonFunctionShared.proto ////////////////////
@@ -1534,6 +1540,10 @@ static int __pyx_CyFunction_init(PyObject *module) {
     return 0;
 }
 
+static CYTHON_INLINE PyType_Spec *__Pyx_Get_CyFunction_Spec(void) {
+    return &__pyx_CyFunctionType_spec;
+}
+
 //////////////////// CythonFunction.export ////////////////////
 
 static PyObject *__Pyx_CyFunction_New(PyMethodDef *ml,
@@ -1543,7 +1553,7 @@ static PyObject *__Pyx_CyFunction_New(PyMethodDef *ml,
                                       PyObject* code);
 
 static PyTypeObject *__Pyx_Get_CyFunction_Type(void);
-static PyType_Spec *__Pyx_Get_CyFunction_Spec(void);
+static PyType_Spec *__Pyx__Get_CyFunction_Spec(void);
 
 //////////////////// CythonFunction ////////////////////
 //@requires: CythonFunctionShared
@@ -1552,7 +1562,7 @@ static PyObject *__Pyx_CyFunction_New(PyMethodDef *ml, int flags, PyObject* qual
                                       PyObject *closure, PyObject *module, PyObject* globals, PyObject* code) {
     // Only used when using shared utility module
     (void)&__Pyx_Get_CyFunction_Type;
-    (void)&__Pyx_Get_CyFunction_Spec;
+    (void)&__Pyx__Get_CyFunction_Spec;
 
     PyObject *op = __Pyx_CyFunction_Init(
         PyObject_GC_New(PyObject, CGLOBAL(__pyx_CyFunctionType)),
@@ -1570,7 +1580,7 @@ static PyTypeObject *__Pyx_Get_CyFunction_Type(void) {
     return tp;
 }
 
-static PyType_Spec *__Pyx_Get_CyFunction_Spec(void) {
+static PyType_Spec *__Pyx__Get_CyFunction_Spec(void) {
     return &__pyx_CyFunctionType_spec;
 }
 
