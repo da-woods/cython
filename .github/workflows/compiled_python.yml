@@ -100,6 +100,7 @@ jobs:
             # TODO: Fix this. Thread sanitizer is producing spurious openmp errors.
             EXCLUDE="$EXCLUDE -x parallel_with_gil"
             echo "TSAN_OPTIONS=suppressions=$TSAN_SUPPRESSIONS ignore_noninstrumented_modules=1 log_path=${{ github.workspace }}/san_log" >> $GITHUB_ENV
+            echo "OMP_TOOL_LIBRARIES=$(realpath "$(clang -print-file-name=libarcher.so)")" >> $GITHUB_ENV
             # Having too many workers seems to lead to an exit without a diagnostic message - possibly memory?
             echo "TEST_PARALLELISM=-j3" >> $GITHUB_ENV
           fi
