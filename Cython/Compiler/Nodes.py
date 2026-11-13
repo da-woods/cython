@@ -10624,6 +10624,7 @@ class ParallelStatNode(StatNode, ParallelNode):
             c.putln(f"PyMutex {Naming.parallel_freethreading_mutex} = {{0}};")
             c.putln("#endif")
 
+            code.putln_openmp(f"#pragma omp flush({Naming.parallel_exc_type})")
             code.putln(
                 "if (%s) {" % Naming.parallel_exc_type)
             code.putln("/* This may have been overridden by a continue, "
@@ -10642,6 +10643,7 @@ class ParallelStatNode(StatNode, ParallelNode):
             c.putln("int %s;" % Naming.parallel_why)
             c.putln("%s = 0;" % Naming.parallel_why)
 
+            code.putln_openmp(f"#pragma omp flush({Naming.parallel_why})")
             code.putln(
                 "if (%s) {" % Naming.parallel_why)
 
@@ -11146,6 +11148,7 @@ class ParallelRangeNode(ParallelStatNode):
         if self.breaking_label_used:
             # Put a guard around the loop body in case return, break or
             # exceptions might be used
+            guard_around_body_codepoint.putln_openmp(f"#pragma omp flush({Naming.parallel_why})")
             guard_around_body_codepoint.putln("if (%s < 2)" % Naming.parallel_why)
 
         code.end_block()  # end guard around loop body
