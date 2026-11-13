@@ -49,6 +49,9 @@ jobs:
               # Python uses clang-17 instead of 18 because of bugs so do the same
               CC=clang-17
               CXX=clang-17
+              sudo apt-get install -y -q libomp-17-dev || exit 1
+          else
+              sudo apt-get install -y -q libomp-dev || exit 1
           fi
           echo "CC=$CC" >> $GITHUB_ENV
           echo "CXX=$CXX" >> $GITHUB_ENV
@@ -100,6 +103,7 @@ jobs:
             # TODO: Fix this. Thread sanitizer is producing spurious openmp errors.
             EXCLUDE="$EXCLUDE -x parallel_with_gil"
             echo "TSAN_OPTIONS=suppressions=$TSAN_SUPPRESSIONS ignore_noninstrumented_modules=1 log_path=${{ github.workspace }}/san_log" >> $GITHUB_ENV
+
             echo "OMP_TOOL_LIBRARIES=$(realpath "$(clang -print-file-name=libarcher.so)")" >> $GITHUB_ENV
             # Having too many workers seems to lead to an exit without a diagnostic message - possibly memory?
             echo "TEST_PARALLELISM=-j3" >> $GITHUB_ENV
