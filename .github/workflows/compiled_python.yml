@@ -52,6 +52,7 @@ jobs:
           fi
           echo "CC=$CC" >> $GITHUB_ENV
           echo "CXX=$CXX" >> $GITHUB_ENV
+          echo "CONFIGURE_CC_ARG=CC=$CC" >> $GITHUB_ENV
 
       - name: Set up sanitizer args
         if: ${{inputs.sanitize}}
@@ -122,7 +123,7 @@ jobs:
         run: |
           git clone --branch main --depth 1 https://github.com/python/cpython/ cpython_main
           cd cpython_main
-          ./configure ${CONFIGURE_ARGS} --prefix=${GITHUB_WORKSPACE}/cpython_install CFLAGS="-O2 $EXTRA_CONFIGURE_CFLAGS"
+          ./configure ${CONFIGURE_ARGS} --prefix=${GITHUB_WORKSPACE}/cpython_install ${CONFIGURE_CC_ARG} CFLAGS="-O2 $EXTRA_CONFIGURE_CFLAGS"
           make -j8
           make install
           ${GITHUB_WORKSPACE}/cpython_install/bin/python3 -m venv ${GITHUB_WORKSPACE}/venv_pydebug
