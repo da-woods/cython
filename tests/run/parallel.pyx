@@ -8,6 +8,23 @@ from libc.stdlib cimport malloc, free
 
 openmp.omp_set_nested(1)
 
+cdef extern from *:
+    """
+    #if (defined(__has_feature) && __has_feature(thread_sanitizer)) || defined(__SANITIZE_THREAD__)
+    #define IS_THREAD_SANITIZED() 1
+    #else
+    #define IS_THREAD_SANITIZED() 0
+    #endif 
+    """
+    bint IS_THREAD_SANITIZED()
+
+def disable_in_tsan(why):
+    if IS_THREAD_SANITIZED():
+        return lambda f: None
+    else:
+        return lambda f: f
+    
+
 cdef int forward(int x) nogil:
     return x
 
@@ -39,6 +56,7 @@ cdef int get_num_threads() noexcept with gil:
 cdef bint check_size(int size) nogil:
     return size > 5
 
+@disable_in_tsan("Writes to p[0] aren't thread-safe and it isn't worth fixing the test")
 def test_num_threads(int size):
     """
     >>> test_num_threads(6)

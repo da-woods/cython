@@ -10365,6 +10365,7 @@ class ParallelStatNode(StatNode, ParallelNode):
                     c.put(" private(%s, %s, %s)" % self.pos_info)
 
                 c.put(" shared(%s)" % ', '.join(shared_vars))
+                c.put(f" private({Naming.parallel_why_private})")
 
     def cleanup_temps(self, code):
         # Now clean up any memoryview slice and object temporaries
@@ -10388,16 +10389,17 @@ class ParallelStatNode(StatNode, ParallelNode):
                 goto end_parallel;
 
             new_return_label:
-                why = 3;
+                why |= 4;
                 goto end_parallel;
 
             end_parallel:;
-                #pragma omp flush(why) # we need to flush for every iteration
             }
 
-            if (why == 3)
+            if (why & 4)
                 goto old_return_label;
         }
+
+        Updates to why are atomic so are safe from multiple threads
         """
         self.old_loop_labels = code.new_loop_labels()
         self.old_error_label = code.new_error_label()
@@ -10456,19 +10458,20 @@ class ParallelStatNode(StatNode, ParallelNode):
             end_code.put_safe("}\n")
             end_code.putln("#endif /* _OPENMP */")
 
-    def trap_parallel_exit(self, code, should_flush=False):
+    def trap_parallel_exit(self, code, in_loop=False):
         """
-        Trap any kind of return inside a parallel construct. 'should_flush'
-        indicates whether the variable should be flushed, which is needed by
-        prange to skip the loop. It also indicates whether we need to register
+        Trap any kind of return inside a parallel construct. 'in_loop'
+        indicates whether we need to register
         a continue (we need this for parallel blocks, but not for prange
         loops, as it is a direct jump there).
 
-        It uses the same mechanism as try/finally:
+        It uses the following values:
             1 continue
             2 break
-            3 return
-            4 error
+            4 return
+            8 error
+        because they're updated with |= from multiple threads, more than
+        one can be set at once.
         """
         save_lastprivates_label = code.new_label()
         dont_return_label = code.new_label()
@@ -10502,19 +10505,17 @@ class ParallelStatNode(StatNode, ParallelNode):
 
             code.put_label(label)
 
-            if not (should_flush and is_continue_label):
+            if not (in_loop and is_continue_label):
                 if label == code.error_label:
                     self.error_label_used = True
                     self.fetch_parallel_exception(code)
 
-                code.putln("%s = %d;" % (Naming.parallel_why, i + 1))
+                code.putln_openmp("#pragma omp atomic update")
+                code.putln("%s |= %d;" % (Naming.parallel_why, 2**i))
             code.put_goto(dont_return_label)
 
         if self.any_label_used:
             code.put_label(dont_return_label)
-
-            if should_flush and self.breaking_label_used:
-                code.putln_openmp("#pragma omp flush(%s)" % Naming.parallel_why)
 
     def fetch_parallel_exception(self, code):
         """
@@ -10547,7 +10548,6 @@ class ParallelStatNode(StatNode, ParallelNode):
         code.put_ensure_gil(declare_gilstate=True)
         code.put_acquire_freethreading_lock()
 
-        code.putln_openmp("#pragma omp flush(%s)" % Naming.parallel_exc_type)
         code.putln(
             "if (!%s) {" % Naming.parallel_exc_type)
 
@@ -10624,15 +10624,6 @@ class ParallelStatNode(StatNode, ParallelNode):
             c.putln(f"PyMutex {Naming.parallel_freethreading_mutex} = {{0}};")
             c.putln("#endif")
 
-            code.putln_openmp(f"#pragma omp flush({Naming.parallel_exc_type})")
-            code.putln(
-                "if (%s) {" % Naming.parallel_exc_type)
-            code.putln("/* This may have been overridden by a continue, "
-                       "break or return in another thread. Prefer the error. */")
-            code.putln("%s = 4;" % Naming.parallel_why)
-            code.putln(
-                "}")
-
         if continue_:
             any_label_used = self.any_label_used
         else:
@@ -10640,12 +10631,13 @@ class ParallelStatNode(StatNode, ParallelNode):
 
         if any_label_used:
             # __pyx_parallel_why is used, declare and initialize
-            c.putln("int %s;" % Naming.parallel_why)
+            c.putln(f"int {Naming.parallel_why}, {Naming.parallel_why_private};")
             c.putln("%s = 0;" % Naming.parallel_why)
 
-            code.putln_openmp(f"#pragma omp flush({Naming.parallel_why})")
+            code.putln_openmp("#pragma omp atomic read")
+            code.putln(f"{Naming.parallel_why_private} = {Naming.parallel_why};")
             code.putln(
-                "if (%s) {" % Naming.parallel_why)
+                "if (%s) {" % Naming.parallel_why_private)
 
             for temp_cname, private_cname, temp_type in self.parallel_private_temps:
                 if temp_type.is_cpp_class:
@@ -10653,26 +10645,32 @@ class ParallelStatNode(StatNode, ParallelNode):
                     temp_cname = "__PYX_STD_MOVE_IF_SUPPORTED(%s)" % temp_cname
                 code.putln("%s = %s;" % (private_cname, temp_cname))
 
-            code.putln("switch (%s) {" % Naming.parallel_why)
-            if continue_:
-                code.put("    case 1: ")
-                code.put_goto(code.continue_label)
-
-            if break_:
-                code.put("    case 2: ")
-                code.put_goto(code.break_label)
-
-            if return_:
-                code.put("    case 3: ")
-                code.put_goto(code.return_label)
-
+            # parallel why can be a bitmask of more than one value.
+            # If error is set, it always takes precendence
             if self.error_label_used:
                 code.globalstate.use_utility_code(restore_exception_utility_code)
-                code.putln("    case 4:")
+                code.putln(f"if ({Naming.parallel_why_private} & 8) {{")
                 self.restore_parallel_exception(code)
                 code.put_goto(code.error_label)
+                code.putln("}")
+            
+            # Ordering of return, break and continue somewhat arbitrary and just represents
+            # a race where two threads reached them at the same time.
+            if return_:
+                code.putln(f"if ({Naming.parallel_why_private} & 4) {{")
+                code.put_goto(code.return_label)
+                code.putln("}")
 
-            code.putln("}")  # end switch
+            if break_:
+                code.putln(f"if ({Naming.parallel_why_private} & 2) {{")
+                code.put_goto(code.break_label)
+                code.putln("}")
+
+            if continue_:
+                code.putln(f"if ({Naming.parallel_why_private} & 1) {{")
+                code.put_goto(code.continue_label)
+                code.putln("}")
+
             code.putln(
                 "}")  # end if
 
@@ -11022,7 +11020,9 @@ class ParallelRangeNode(ParallelStatNode):
 
         if self.else_clause:
             if self.breaking_label_used:
-                code.put("if (%s < 2)" % Naming.parallel_why)
+                code.putln_openmp("#pragma omp atomic read")
+                code.putln(f"{Naming.parallel_why_private} = {Naming.parallel_why};")
+                code.put("if (%s < 2)" % Naming.parallel_why_private)
 
             code.begin_block()  # else block
             code.putln("/* else */")
@@ -11140,7 +11140,7 @@ class ParallelRangeNode(ParallelStatNode):
             code.funcstate.start_collecting_temps()
 
         self.body.generate_execution_code(code)
-        self.trap_parallel_exit(code, should_flush=True)
+        self.trap_parallel_exit(code, in_loop=True)
         if self.is_parallel and not self.is_nested_prange:
             # nested pranges are not omp'ified, temps go to outer loops
             self.privatize_temps(code)
@@ -11148,8 +11148,9 @@ class ParallelRangeNode(ParallelStatNode):
         if self.breaking_label_used:
             # Put a guard around the loop body in case return, break or
             # exceptions might be used
-            guard_around_body_codepoint.putln_openmp(f"#pragma omp flush({Naming.parallel_why})")
-            guard_around_body_codepoint.putln("if (%s < 2)" % Naming.parallel_why)
+            guard_around_body_codepoint.putln_openmp("#pragma omp atomic read")
+            guard_around_body_codepoint.putln(f"{Naming.parallel_why_private} = {Naming.parallel_why};")
+            guard_around_body_codepoint.putln("if (%s < 2)" % Naming.parallel_why_private)
 
         code.end_block()  # end guard around loop body
         code.end_block()  # end for loop block
