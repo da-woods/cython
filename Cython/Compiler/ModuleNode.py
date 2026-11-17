@@ -2049,11 +2049,7 @@ class ModuleNode(Nodes.Node, Nodes.BlockNode):
 
         slot_func_cname = scope.mangle_internal("tp_dealloc")
         code.start_slotfunc(scope, PyrexTypes.c_void_type, "tp_dealloc", "PyObject *o")
-        # It isn't possible to safely get the module state from o because of
-        # https://github.com/python/cpython/issues/160840. Therefore use the generic fallback.
-        # (It's possibly an open question if it's safe to use module state at all
-        # here but that's to be decided.)
-        code.put_utility_code_module_state_definitions()
+        code.put_function_get_module_state_definitions("o")
 
         is_final_type = scope.parent_type.is_final_type
         needs_gc = scope.needs_gc()

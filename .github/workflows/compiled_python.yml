@@ -118,7 +118,7 @@ jobs:
 
       - name: Build Python
         run: |
-          git clone --branch main --depth 1 https://github.com/python/cpython/ cpython_main
+          git clone --branch getmodulelebydef-safe --depth 1 https://github.com/encukou/cpython/ cpython_main
           cd cpython_main
           ./configure ${CONFIGURE_ARGS} --prefix=${GITHUB_WORKSPACE}/cpython_install CFLAGS="-O2 $EXTRA_CONFIGURE_CFLAGS"
           make -j8
