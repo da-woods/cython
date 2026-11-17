@@ -130,6 +130,7 @@ jobs:
         run: |
           cd "${GITHUB_WORKSPACE}/"
           source venv_pydebug/bin/activate
+          export CFLAGS="-DCYTHON_USE_MODULE_STATE=1"
           bash ./Tools/ci-run.sh
 
       - name: Archive logs
