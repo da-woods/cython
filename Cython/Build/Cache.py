@@ -239,7 +239,8 @@ class Cache:
                 if total_size < self.cache_size:
                     return True
         except (OSError, ValueError):
-            pass
+            print("du failed", file=sys.stderr)
+        print("du ran", completed_process.returncode, completed_process.stdout, file=sys.stderr)
         return False
 
     def cleanup_cache(self, ratio=DEFAULT_DELETE_RATIO):
