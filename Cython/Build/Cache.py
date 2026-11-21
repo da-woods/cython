@@ -230,9 +230,17 @@ class Cache:
     def _cachedir_looks_small_enough(self):
         try:
             # Quick check for total directory size (on unixy systems).
+            try:
+                print("before du", os.stat(os.path.join(self.path, "old_file.cache")).st_atime, file=sys.stderr)
+            except:
+                pass
             completed_process = subprocess.run(
                 ["du", "-s", "-k", os.path.abspath(self.path)], stdout=subprocess.PIPE
             )
+            try:
+                print("after du", os.stat(os.path.join(self.path, "old_file.cache")).st_atime, file=sys.stderr)
+            except:
+                pass
             stdout = completed_process.stdout
             if completed_process.returncode == 0:
                 total_size = 1024 * int(stdout.strip().split()[0])
