@@ -402,6 +402,9 @@ class TestCyCacheCleanup(unittest.TestCase):
         recent_file1 = self._create_cache_file('recent1.cache', 4000, base_time - 10)
         recent_file2 = self._create_cache_file('recent2.cache', 4000, base_time)
 
+        time.sleep(1.0)
+        print(f"relooking {os.stat(os.path.join(self.cache_dir, 'old.cache')).st_atime}")
+
         # Run cleanup.
         self.cache.cleanup_cache()
 

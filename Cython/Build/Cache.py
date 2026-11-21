@@ -186,6 +186,10 @@ class Cache:
     def _list_cache_files(self):
         total_size = 0
         cache_files = []
+        try:
+            print(f"before scandir {os.stat(os.path.join(self.path, 'old.cache')).st_atime}")
+        except:
+            pass
         with os.scandir(self.path) as entries:
             for entry in entries:
                 if entry.name.endswith('.tmp'):
