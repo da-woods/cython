@@ -228,6 +228,11 @@ class Cache:
                 print("OSError", file=sys.stderr)
 
     def _cachedir_looks_small_enough(self):
+        if sys.platform == "win32":
+            # sysinternals du exists and behaves mostly like unix du.
+            # However, at least on Arm, it sometimes modifies the access time of the contained files
+            # which makes it completely unsuitable for a quick cache size check.
+            return False
         try:
             # Quick check for total directory size (on unixy systems).
             try:
