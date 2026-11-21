@@ -250,6 +250,7 @@ class TestCyCacheCleanup(unittest.TestCase):
             size_bytes: Size of the file in bytes
             access_time: Unix timestamp for file access time (uses current time if None)
         """
+        import sys
         file_path = os.path.join(self.cache_dir, filename)
 
         # Create file with specified size
@@ -258,9 +259,11 @@ class TestCyCacheCleanup(unittest.TestCase):
 
         # Set access time if provided
         if access_time is not None:
+            print(f"writing file {file_path} with {access_time=}", file=sys.stderr)
             os.utime(file_path, (access_time, access_time))
         else:
             self.assertTrue(os.path.exists(file_path), f"{file_path} should exist after creation")
+        print(f"{file_path=} has access time {os.stat(file_path).st_atime}", file=sys.stderr)
 
         return file_path
 
