@@ -213,12 +213,15 @@ class Cache:
             try:
                 os.unlink(file_path)
                 total_size -= size
+                print(f"Success: {file_path=}", file=sys.stderr)
             except FileNotFoundError:
                 # Concurrently deleted. Nothing left to delete for us.
                 total_size -= size
+                print("FileNotFoundError", file=sys.stderr)
             except OSError:
                 # Concurrent access on Windows? Keep the file, cannot delete it right now.
                 pass
+                print("OSError", file=sys.stderr)
 
     def _cachedir_looks_small_enough(self):
         try:
@@ -239,14 +242,18 @@ class Cache:
         """Reduce the total file size in the cache to ratio*cache_size
         by evicting the least recently accessed entries.
         """
+        import sys
         if self._cachedir_looks_small_enough():
+            print("looks small enough", file=sys.stderr)
             return
 
         total_size, cache_files = self._list_cache_files()
 
+        print(f"{total_size=} {self.cache_size=}", file=sys.stderr)
         if total_size > self.cache_size:
             # Sort oldest access time first (then smallest size) to delete least recently used entries.
             self._sort_files_by_atime(cache_files)
+            print(f"{cache_files=}", file=sys.stderr)
 
             max_cache_size = int(self.cache_size * ratio)
             self._delete_cache_files(cache_files, total_size, max_cache_size)
