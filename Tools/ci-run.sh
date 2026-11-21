@@ -207,7 +207,7 @@ if [[ $PYTHON_VERSION != "pypy"* && $OSTYPE != "msys" && $OSTYPE != "cygwin" ]];
   PYTHON_DBG="python$PYTHON_DBG-dbg"
   if $PYTHON_DBG -V >&2; then
     CFLAGS=$CFLAGS $PYTHON_DBG \
-      runtests.py -vv --no-code-style Debugger --backends=$BACKEND
+      runtests.py -vv --no-code-style Debugger --backends=$BACKEND CyCache
   fi
 fi
 
@@ -223,7 +223,7 @@ if [[ $COVERAGE == "1" ]]; then
   RUNTESTS_ARGS="$RUNTESTS_ARGS --coverage --coverage-html --coverage-md --cython-only"
 fi
 if [[ ! $TEST_PARALLELISM ]]; then
-  TEST_PARALLELISM=-j7
+  TEST_PARALLELISM=
 fi
 RUNTESTS_ARGS="$RUNTESTS_ARGS $TEST_PARALLELISM"
 
@@ -249,6 +249,7 @@ $PYTHON $GRAAL_PYTHON_ARGS runtests.py \
   --no-cleanup \
   -x Debugger \
   --backends=$BACKEND \
+  CyCache
   $SHARED_UTILITY \
   $EXCLUDE \
   $RUNTESTS_ARGS
