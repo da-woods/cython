@@ -121,7 +121,7 @@ jobs:
 
   ci-arm64:
     # ARM builds
-    needs: [ci-early-success, file-changes]
+    needs: [file-changes]
     if: ${{ github.event_name == 'workflow_dispatch' || needs.file-changes.outputs.ci-changes == 'true' || github.ref_type == 'tag' }}
 
     strategy:
